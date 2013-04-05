@@ -1,4 +1,6 @@
 *.py[cod]
+*.swp
+/tex/*
 
 # C extensions
 *.so

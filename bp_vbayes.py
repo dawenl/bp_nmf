@@ -2,7 +2,7 @@ import sys, math
 import numpy as np
 import scipy.optimize, scipy.special
 
-class BpNMF:
+class Bp_NMF:
     def __init__(self, X, K=512, RSeed=np.random.seed(), **kwargs):
         self.X = X.copy()
         self.F, self.T = self.X.shape
@@ -52,16 +52,16 @@ class BpNMF:
 
     def _exp(self, mu, r):
         '''
-        Given mean and precision of a Gaussian r.v. theta, compute E[exp(theta)], E[exp(2*theta)], and E[exp(-theta)]
+        Given mean and precision of a Gaussian r.v. theta ~ N(mu, 1/r), compute E[exp(theta)], E[exp(2*theta)], and E[exp(-theta)]
         '''
-        return (np.exp(mu + 1./(2*r)), np.exp(2*mu + 2./r), np.exp(mu - 1./(2*r)))
+        return (np.exp(mu + 1./(2*r)), np.exp(2*mu + 2./r), np.exp(-mu + 1./(2*r)))
 
-    def update(self, time=False, verbose=True):
+    def update(self, timed=False, verbose=True):
         print 'Updating DZS...'
         for k in xrange(self.K):
             self.update_phi(k)
-            self.update_z_k(k)
-            self.update_psi(k, time)
+            self.update_z(k)
+            self.update_psi(k, timed)
             if verbose:
                 sys.stdout.write('.')
         if verbose:
@@ -80,6 +80,12 @@ class BpNMF:
         def f(phi):
             lcoef, qcoef = f_stub(phi)
             const = -1./2*phi**2
+            #if ~np.alltrue(~np.isnan(lcoef)):
+            #    print 'LC: {}'.format(lcoef)
+            #if ~np.alltrue(~np.isnan(qcoef)):
+            #    print 'QC: {}'.format(qcoef)
+            #if ~np.alltrue(~np.isnan(const)):
+            #    print 'Const: {}'.format(const)
             return -np.sum(lcoef + qcoef + const)
 
         def df(phi):
@@ -98,10 +104,14 @@ class BpNMF:
         self.mu_phi[:,k], self.r_phi[:,k] = mu_hat, df2(mu_hat)
         if np.alltrue(self.r_phi[:,k] > 0) == False:
             if d['warnflag'] == 2:
-                print d['task']
+                print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(mu_hat))
             else:
-                print d['warnflag']
-        # update expected dictionary
+                print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(mu_hat))
+            if np.isnan(f(mu_hat)):
+                print np.alltrue(~np.isnan(self.ED))
+                print np.alltrue(~np.isnan(self.ES))
+                print np.alltrue(~np.isnan(self.EZ))
+                print np.alltrue(~np.isnan(np.dot(self.ED, self.ES*self.EZ)))
         self.ED[:,k], self.ED2[:,k], _ = self._exp(self.mu_phi[:,k], self.r_phi[:,k])
   
     def update_z(self, k):
@@ -112,8 +122,8 @@ class BpNMF:
         self.p_z[k,:] = 1./(1 + np.exp(p0 - p1))
         self.EZ[k,:] = self.p_z[k,:]
 
-    def update_psi(self, k, time=False):
-        if time:
+    def update_psi(self, k, timed=False):
+        if timed:
             self._update_psi_time(k)
         else:
             self._update_psi_ntime(k)
@@ -142,99 +152,74 @@ class BpNMF:
         psi0 = self.mu_psi[k,:]
         mu_hat, _, d = scipy.optimize.fmin_l_bfgs_b(f, psi0, fprime=df, disp=5)
         self.mu_psi[k,:], self.r_psi[k,:] = mu_hat, df2(mu_hat)
-        if np.alltrue(self.r_phi[:,k] > 0) == False:
+        if np.alltrue(self.r_psi[k,:] > 0) == False:
             if d['warnflag'] == 2:
-                print d['task']
+                print 'S[{}, :]: {}'.format(k, d['task'])
             else:
-                print d['warnflag']
+                print 'S[{}, :]: {}'.format(k, d['warnflag'])
         self.ES[k,:], self.ES2[k,:], self.ESinv[k,:] = self._exp(self.mu_psi[k,:], self.r_psi[k,:])
 
     def _update_psi_time(self, k):
-        pass
+        def f_stub(psi_t):
+            lcoef = self.Eg * np.sum(self.ED[:,k] * np.exp(psi_t) * self.EZ[k,t] * Eres[:,t])
+            qcoef = -1./2 * self.Eg * np.sum(self.ED2[:,k] * np.exp(2*psi_t) * self.EZ[k,t])
+            return (lcoef, qcoef)
 
-    ## WRONG
-    #def update_psi(self, t):
-    #    def f_eta(psi):
-    #        return self.Eg * np.exp(psi) * self.EZ[:,t] * np.sum(self.X[:,t]) * np.sum(self.ED, axis=0)
-    #    
-    #    def f(psi):
-    #        '''
-    #        The function to be minimized. Only terms related to Psi_{kt} is kept 
-    #        '''
-    #        Eeta = f_eta(psi) 
-    #        EAeta = self.Eg/2 * (np.exp(2*psi)*self.EZ[:,t]*np.sum(self.ED2, axis=0) + 2 * np.exp(psi)*self.EZ[:,t]*np.sum(self.ED * Eres, axis=0))
-    #        if t == 0:
-    #            # no expectation, just log(P(psi_t))
-    #            Ebwd = self.alpha * psi - self.alpha * np.exp(psi) 
-    #        else:
-    #            Ebwd = self.alpha * psi - self.alpha*self.ESinv[:,t-1]*np.exp(psi)
-    #        if t == self.T-1:
-    #            Efwd = 0
-    #        else:
-    #            Efwd = - self.alpha * np.exp(-psi) * self.ESinv[:,t+1] - self.alpha*psi
-    #        return -np.sum(Eeta - EAeta + Efwd + Ebwd)
+        def f(psi_t):
+            lcoef, qcoef = f_stub(psi_t)
+            if t == 0:
+                bwd = self.alpha * psi_t - self.alpha * np.exp(psi_t)
+            else:
+                bwd = self.alpha * psi_t - self.alpha * self.ESinv[k,t-1] * np.exp(psi_t)
+            if t == self.T-1:
+                fwd = 0
+            else:
+                fwd = -self.alpha * self.ES[k, t+1] * np.exp(-psi_t) - self.alpha * psi_t
+            const = bwd + fwd
+            return -(lcoef + qcoef + const)
 
-    #    def df(psi):
-    #        '''
-    #        The first derivative of f(psi)
-    #        '''
-    #        dEeta = f_eta(psi) 
-    #        dEAeta = self.Eg * (np.exp(2*psi)*self.EZ[:,t]*np.sum(self.ED2, axis=0) + np.exp(psi)*self.EZ[:,t]*np.sum(self.ED * Eres, axis=0))
-    #        if t == 0:
-    #            dEbwd = self.alpha - self.alpha * np.exp(psi)
-    #        else:
-    #            dEbwd = self.alpha - self.alpha * self.ESinv[:,t-1] * np.exp(psi)
-    #        if t == self.T-1:
-    #            dEfwd = 0
-    #        else:
-    #            dEfwd = self.alpha * np.exp(-psi) * self.ESinv[:,t+1] - self.alpha
-    #        return -(dEeta - dEAeta + dEfwd + dEbwd)
+        def df(psi_t):
+            lcoef, qcoef = f_stub(psi_t)
+            if t == 0:
+                bwd = self.alpha - self.alpha * np.exp(psi_t)
+            else:
+                bwd = self.alpha - self.alpha * self.ESinv[k,t-1] * np.exp(psi_t)
+            if t == self.T-1:
+                fwd = 0
+            else:
+                fwd = self.alpha * self.ES[k, t+1] * np.exp(-psi_t) - self.alpha 
+            const = bwd + fwd
+            return -(lcoef + 2*qcoef + const)
 
-    #    def df2(psi):
-    #        '''
-    #        The Hessian of f(psi)
-    #        '''
-    #        dEeta2 = f_eta(psi) 
-    #        dEAeta2 = self.Eg * (2*np.exp(2*psi)*self.EZ[:, t]*np.sum(self.ED2, axis=0) + np.exp(psi)*self.EZ[:,t]*np.sum(self.ED * Eres, axis=0))
-    #        if t == 0:
-    #            dEbwd2 = -self.alpha * np.exp(psi)
-    #        else:
-    #            dEbwd2 = -self.alpha * self.ESinv[:,t-1] * np.exp(psi)
-    #        if t == self.T-1:
-    #            dEfwd2 = 0
-    #        else:
-    #            dEfwd2 = -self.alpha * np.exp(-psi) * self.ESinv[:,t+1]
-    #        return -(dEeta2 - dEAeta2 + dEfwd2 + dEbwd2)
-    #    #idx = (self.EZ[:,t] == 1)
+        def df2(psi_t):
+            lcoef, qcoef = f_stub(psi_t)
+            if t == 0:
+                bwd = - self.alpha * np.exp(psi_t)
+            else:
+                bwd = - self.alpha * self.ESinv[k,t-1] * np.exp(psi_t)
+            if t == self.T-1:
+                fwd = 0
+            else:
+                fwd = -self.alpha * self.ES[k, t+1] * np.exp(-psi_t) 
+            const = bwd + fwd
+            return -(lcoef + 4*qcoef + const)
+        
+        Eres = self.X - np.dot(self.ED, self.ES*self.EZ) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:]) 
+        for t in xrange(self.T):
+            if self.EZ[k,t] == 0:
+                self.ES[k,t], self.ES2[k,t], self.ESinv[k,t] = 1., 1., 1.
+                continue
+            mu_t_hat, _, d = scipy.optimize.fmin_l_bfgs_b(f, self.mu_psi[k,t], fprime=df, disp=5)
+            self.mu_psi[k,t], self.r_psi[k,t] = mu_t_hat, df2(mu_t_hat)
+            if self.r_psi[k,t] <= 0:
+                if d['warnflag'] == 2:
+                    print 'S[{}, {}]:{}, Z:{}, mu={}, f={}, df={}, df2={}'.format(k, t, d['task'], self.EZ[k,t], mu_t_hat, f(mu_t_hat), df(mu_t_hat), df2(mu_t_hat))
+                else:
+                    print 'S[{}, {}]:{}, Z:{}, mu={}, f={}, df={}, df2={}'.format(k, t, d['warnflag'], self.EZ[k,t], mu_t_hat, f(mu_t_hat), df(mu_t_hat), df2(mu_t_hat))
+            self.ES[k,t], self.ES2[k,t], self.ESinv[k,t] = self._exp(self.mu_psi[k,t], self.r_psi[k,t])
+            if np.isinf(self.ES[k,t]):
+                print 'Inf ES'
 
-    #    #mu_const = -1./2 * np.log((self.alpha + 1)/self.alpha)
-    #    #r_const = 1./(np.log(self.alpha + 1) - np.log(self.alpha))
-    #    
-    #    #self.mu_psi[:,t], self.r_psi[:,t] = mu_const, r_const
-    #    # only update the terms with z = 1, for the remaining just update so that E[S] = 1, E[S^2] = (alpha + 1)/alpha
-    #    
-    #    dummy = np.dot(self.ED, self.ES[:,t]*self.EZ[:,t])
-    #    # F by K matrix with each column as E[X_t^{-k}] = E[D] * (E[S_t] .* E[Z_t]) - E[D_k] * (E[S_{kt}] .* E[Z_{kt}] 
-    #    Eres = np.tile(dummy, (self.K, 1)).T - np.dot(self.ED, np.diag(self.ES[:,t] * self.EZ[:,t]))
-
-    #    #psi0 = np.zeros((K, ))
-    #    psi0 = self.mu_psi[:,t]
-    #    #tmp, _, _ = scipy.optimize.fmin_tnc(f, psi0, fprime=df, disp=5)
-    #    tmp, _, _ = scipy.optimize.fmin_l_bfgs_b(f, psi0, fprime=df, disp=5)
-    #    self.mu_psi[:,t], self.r_psi[:,t] = tmp, df2(tmp)
-    #    
-    #    self.ES[:,t], self.ES2[:,t], self.ESinv[:,t] = self._exp(self.mu_psi[:,t], self.r_psi[:,t])
-
-    ## WRONG
-    #def update_z(self, t):
-    #    # F by K matrix with each column as X_t - E[X_t^{-k}]
-    #    Eres = np.tile(self.X[:,t] - np.dot(self.ED, self.ES[:,t]*self.EZ[:,t]), (self.K, 1)).T + np.dot(self.ED, np.diag(self.ES[:,t] * self.EZ[:,t]))
-    #    dummy = self.Eg * (-1./2 * self.ES2[:,t] * np.sum(self.ED2, axis=0) + self.ES[:,t] * np.sum(self.ED * Eres, axis=0))
-    #    p0 = scipy.special.psi(self.beta_pi) - scipy.special.psi(self.alpha_pi + self.beta_pi)
-    #    p1 = scipy.special.psi(self.alpha_pi) - scipy.special.psi(self.alpha_pi + self.beta_pi) + dummy
-    #    self.p_z[:,t] = 1./(1 + np.exp(p0 - p1))
-    #    #self.EZ[:,t] = np.round(self.p_z[:,t])
-    #    self.EZ[:,t] = (p1 >= p0).astype(int)
 
     def update_pi(self):
         self.alpha_pi = self.a0/self.K + np.sum(self.EZ, axis=1)

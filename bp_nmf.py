@@ -4,6 +4,7 @@
 # <codecell>
 
 import bp_vbayes
+import time
 from plot_utils import *
 
 # <codecell>
@@ -28,34 +29,61 @@ plot_decomp(args=(D, (S*Z), X))
 # <codecell>
 
 import librosa
-x, sr = librosa.load('../data/dawen.wav')
-Xc = librosa.stft(x, n_fft=512)
+x, sr = librosa.load('../data/mix_var5a_8k.wav', sr=None)
+#x, sr = librosa.load('../data/dawen.wav')
+Xc = librosa.stft(x, n_fft=256)
 X = abs(Xc)
-K = 512
+K = 256
 
 # <codecell>
 
 reload(bp_vbayes)
-bnmf = bp_vbayes.Bp_NMF(X, K=K, RSeed=random.seed(357))
+init_option = 'NMF'
+bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, RSeed=random.seed(357))
 
 # <codecell>
 
-N = 10
+k = 0
+self = bnmf
+Eres = self.X - np.dot(self.ED, self.ES*self.EZ) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
+def f_stub(phi):
+    lcoef = self.Eg * np.sum(np.outer(np.exp(phi), self.ES[k,:]*self.EZ[k,:]) * Eres, axis=1)
+    qcoef = -1./2 * self.Eg * np.sum(np.outer(np.exp(2*phi), self.ES2[k,:]*self.EZ[k,:]), axis=1)
+    return (lcoef, qcoef)
+def f(phi):
+    lcoef, qcoef = f_stub(phi)
+    const = -1./2*phi**2
+    if ~np.alltrue(~np.isnan(lcoef)):
+        print 'LC: {}'.format(lcoef)
+    if ~np.alltrue(~np.isnan(qcoef)):
+        print 'QC: {}'.format(qcoef)
+    if ~np.alltrue(~np.isnan(const)):
+        print 'Const: {}'.format(const)
+    return -np.sum(lcoef + qcoef + const)
+
+f(self.mu_phi[:,0])
+
+# <codecell>
+
+N = 25
 timed = zeros((N,), dtype='bool')
 #timed = ones((N,), dtype='bool')
-timed[-6:] = True
-good_k = np.arange(bnmf.K)
+timed[-5:] = True
 obj = []
 for i in xrange(N):
-    print 'Iteration: {}, good K: {}'.format(i, good_k.shape[0])
+    good_k = bnmf.good_k
+    start_t = time.time()
     for k in good_k:
         bnmf.update_phi(k)
         bnmf.update_z(k)
         bnmf.update_psi(k, timed=timed[i])
     bnmf.update_pi()
     bnmf.update_r()
-    good_k = np.delete(good_k, np.where(np.sum(bnmf.EZ[good_k,:], axis=1) < 1e-16))
+    #bnmf.good_k = np.delete(good_k, np.where(np.sum(bnmf.EZ[good_k,:], axis=1) < 1e-10))
+    bnmf.good_k = np.delete(good_k, np.where(bnmf.Epi[good_k] < 1e-3*np.max(bnmf.Epi[good_k])))
     bnmf._lower_bound()
+    t = time.time() - start_t
+    print 'Iteration: {}, good K: {}, time: {:.2f}'.format(i,bnmf.good_k.shape[0], t)
     obj.append(bnmf.obj)
 
 # <codecell>
@@ -112,7 +140,7 @@ print amax(bnmf.ED), amin(bnmf.ED)
 # <codecell>
 
 import pymf
-nmf = pymf.NMF(X, num_bases=10, niter=100)
+nmf = pymf.NMF(X, num_bases=good_k.shape[0], niter=500)
 nmf.initialization()
 nmf.factorize()
 
@@ -133,7 +161,7 @@ def separate(W, H, save=True):
     L = W.shape[1]
     for l in xrange(L): 
         XL = Xc * np.outer(W[:,l], H[l,:])/den
-        xl.append(librosa.istft(XL, n_fft=512))
+        xl.append(librosa.istft(XL, n_fft=256))
     if save:
         sio.savemat('xl.mat', {'xl':np.array(xl)})
     return np.array(xl)
@@ -145,6 +173,19 @@ xl_bp = separate(bnmf.ED[:,good_k], bnmf.ES[good_k,:]*around(bnmf.EZ[good_k,:]))
 import scikits.audiolab as audiolab
 for i in xrange(good_k.shape[0]):
     audiolab.play(xl_bp[i,:])
+
+# <codecell>
+
+print sort(bnmf.Epi)[:20]
+print max(bnmf.Epi)/min(bnmf.Epi), min(bnmf.Epi)
+bnmf.Epi < 1e-3*max(bnmf.Epi)
+plot(flipud(sort(bnmf.Epi/max(bnmf.Epi))), '-o')
+pass
+
+# <codecell>
+
+plot_decomp(args=({'D':around(bnmf.EZ[good_k[idx],:]), 'T':'EZ'},))
+#print bnmf.EZ.shape
 
 # <codecell>
 

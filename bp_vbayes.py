@@ -347,5 +347,6 @@ class Bp_NMF:
         self.obj += np.sum(scipy.special.beta(self.alpha_pi, self.beta_pi) - (self.alpha_pi - 1) * scipy.special.psi(self.alpha_pi) - (self.beta_pi - 1) * scipy.special.psi(self.beta_pi) + (self.alpha_pi + self.beta_pi - 2) * scipy.special.psi(self.alpha_pi + self.beta_pi))
         # E[log P(gamma) - log q(gamma)]
         self.obj += (self.c0 - 1) * (scipy.special.psi(self.alpha_g) - np.log(self.beta_g)) - self.d0 * self.Eg     # E[log P(gamma)]
-        self.obj += self.alpha_g - np.log(self.beta_g) + np.sum(np.log(np.arange(1, np.around(self.alpha_g)))) + (1-self.alpha_g) * scipy.special.psi(self.alpha_g)
+        ## Stirling to approximate log(gamma(alpha_g))
+        self.obj += self.alpha_g - np.log(self.beta_g) + ((self.alpha_g-.5)*np.log(self.alpha_g) - self.alpha_g + .5*np.log(2*math.pi)) + (1-self.alpha_g) * scipy.special.psi(self.alpha_g)
         pass

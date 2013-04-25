@@ -11,17 +11,16 @@ import librosa
 # <codecell>
 
 ## Load Pickled data if necessary
-filename = 'bnmf_mix5a_20T'
+filename = 'bnmf_mix5a_R_20T'
 with open(filename, 'r') as output:
     bnmf = pickle.load(output)
 
 # <codecell>
 
-x, sr = librosa.load('../data/bassoon_var5a.wav', sr=22050)
-#x, sr = librosa.load('../data/mix_var5a_8k.wav', sr=None)
+x, sr = librosa.load('../data/mix_var5a_8k.wav', sr=None)
 #x, sr = librosa.load('../data/demo.wav')
-n_fft = 512
-Xc = librosa.stft(x, n_fft=n_fft, hop_length=n_fft)
+n_fft = 256
+Xc = librosa.stft(x, n_fft=n_fft)
 X = abs(Xc)
 K = 256
 print X.shape
@@ -76,7 +75,7 @@ for i in xrange(N):
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 print diff(obj)
-plot(obj[2:])
+plot(obj[1:])
 pass
 
 # <codecell>
@@ -95,20 +94,24 @@ plot_decomp(args=({'D':20*log10(X), 'T':'Original Spectrogram'},
 ## Plot decomposition
 idx = flipud(argsort(bnmf.Epi[good_k]))
 tmpED = bnmf.ED.copy()
+tmpED /= np.max(bnmf.ED, axis=0)
+tmpES = bnmf.ES.copy()
+tmpES *= np.max(bnmf.ED, axis=0).reshape(-1,1)
 tmpED[tmpED < threshold] = threshold
 figure(2)
 plot_decomp(args=({'D':20*log10(tmpED[:,good_k[idx]]), 'T':'ED'}, 
             {'D':around(bnmf.EZ[good_k[idx],:]), 'T':'EZ'}, 
-            {'D':(around(bnmf.EZ)*bnmf.ES)[good_k[idx],:], 'T':'ES*EZ'}), cmap=cm.hot_r)
+            {'D':(around(bnmf.EZ)*tmpES)[good_k[idx],:], 'T':'ES*EZ'}), cmap=cm.hot_r)
 figure(3)
 plot(flipud(sort(bnmf.Epi[good_k])), '-o')
 title('Expected membership prior Pi')
 
 # <codecell>
 
-#plot_decomp(args=((bnmf.ES*bnmf.EZ)[good_k[idx],:400],), cmap=cm.jet)
-imshow((bnmf.ES*bnmf.EZ)[good_k[idx],:400], cmap=cm.jet, aspect='auto', origin='lower', interpolation='nearest')
-colorbar()
+tmpED = bnmf.ED.copy()
+tmpED /= np.sum(tmpED**2, axis=0)**0.5
+plot_decomp(args=(dot(tmpED[:,good_k[idx]].T, tmpED[:,good_k[idx]]),))
+print float(sum((bnmf.ES*bnmf.EZ)[good_k[idx[23:]],:] > 1e-4)) / (good_k[23:].shape[0] * bnmf.T)
 
 # <codecell>
 
@@ -167,7 +170,7 @@ for i in xrange(good_k.shape[0]):
 def save_object(obj, filename):
     with open(filename, 'wb') as output:
         pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
-save_object(bnmf, 'bnmf_bassoon_20N')
+save_object(bnmf, 'bnmf_mix5a_20N')
 
 # <codecell>
 

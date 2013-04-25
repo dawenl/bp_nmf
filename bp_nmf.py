@@ -3,98 +3,85 @@
 
 # <codecell>
 
+import time, pickle
 import bp_vbayes
-import time
 from plot_utils import *
-
-# <codecell>
-
-# generate data
-random.seed(13579)
-K = 72
-L = 9
-F = 36
-T = 300
-D = exp(randn(F, L))
-#S = empty((L, T))
-#S[:,0] = random.gamma(2, scale=1./2, size=(L,))
-#for t in xrange(1, T):
-#    S[:, t] = random.gamma(2, scale=S[:,t-1]/2., size=(L,)) 
-S = random.gamma(2, scale=1./2, size=(L,T))
-Z = ones((L,T))
-#Z = random.binomial(1, 0.8, size=(L,T))
-X = dot(D, S*Z)  
-plot_decomp(args=(D, (S*Z), X))
-
-# <codecell>
-
 import librosa
-x, sr = librosa.load('../data/mix_var5a_8k.wav', sr=None)
-#x, sr = librosa.load('../data/dawen.wav')
-Xc = librosa.stft(x, n_fft=256)
+
+# <codecell>
+
+## Load Pickled data if necessary
+filename = 'bnmf_mix5a_20T'
+with open(filename, 'r') as output:
+    bnmf = pickle.load(output)
+
+# <codecell>
+
+x, sr = librosa.load('../data/bassoon_var5a.wav', sr=22050)
+#x, sr = librosa.load('../data/mix_var5a_8k.wav', sr=None)
+#x, sr = librosa.load('../data/demo.wav')
+n_fft = 512
+Xc = librosa.stft(x, n_fft=n_fft, hop_length=n_fft)
 X = abs(Xc)
 K = 256
+print X.shape
 
 # <codecell>
 
 reload(bp_vbayes)
-init_option = 'NMF'
+init_option = 'Rand'
 bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, RSeed=random.seed(357))
 
 # <codecell>
 
-k = 0
-self = bnmf
-Eres = self.X - np.dot(self.ED, self.ES*self.EZ) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
-def f_stub(phi):
-    lcoef = self.Eg * np.sum(np.outer(np.exp(phi), self.ES[k,:]*self.EZ[k,:]) * Eres, axis=1)
-    qcoef = -1./2 * self.Eg * np.sum(np.outer(np.exp(2*phi), self.ES2[k,:]*self.EZ[k,:]), axis=1)
-    return (lcoef, qcoef)
-def f(phi):
-    lcoef, qcoef = f_stub(phi)
-    const = -1./2*phi**2
-    if ~np.alltrue(~np.isnan(lcoef)):
-        print 'LC: {}'.format(lcoef)
-    if ~np.alltrue(~np.isnan(qcoef)):
-        print 'QC: {}'.format(qcoef)
-    if ~np.alltrue(~np.isnan(const)):
-        print 'Const: {}'.format(const)
-    return -np.sum(lcoef + qcoef + const)
-
-f(self.mu_phi[:,0])
-
-# <codecell>
-
-N = 25
-timed = zeros((N,), dtype='bool')
-#timed = ones((N,), dtype='bool')
-timed[-5:] = True
+N = 20
+#timed = zeros((N,), dtype='bool')
+timed = ones((N,), dtype='bool')
+timed[0] = False
+#timed[-10:] = True
 obj = []
 for i in xrange(N):
-    good_k = bnmf.good_k
     start_t = time.time()
-    for k in good_k:
-        bnmf.update_phi(k)
-        bnmf.update_z(k)
-        bnmf.update_psi(k, timed=timed[i])
-    bnmf.update_pi()
-    bnmf.update_r()
-    #bnmf.good_k = np.delete(good_k, np.where(np.sum(bnmf.EZ[good_k,:], axis=1) < 1e-10))
-    bnmf.good_k = np.delete(good_k, np.where(bnmf.Epi[good_k] < 1e-3*np.max(bnmf.Epi[good_k])))
-    bnmf._lower_bound()
+    bnmf.update(timed=timed[i])
     t = time.time() - start_t
     print 'Iteration: {}, good K: {}, time: {:.2f}'.format(i,bnmf.good_k.shape[0], t)
     obj.append(bnmf.obj)
 
 # <codecell>
 
+threshold = 0.0001
+N = 30
+#timed = zeros((N,), dtype='bool')
+timed = ones((N,), dtype='bool')
+timed[0] = False
+#timed[-5:] = True
+obj = []
+improvement = 1
+for i in xrange(N):
+    start_t = time.time()
+    bnmf.update(timed=timed[i])
+    t = time.time() - start_t
+    
+    if i > 0:
+        last_score = score
+    score = bnmf.obj
+    obj.append(score)
+    if i > 0:
+        improvement = (score - last_score)/abs(last_score)
+    print 'Iteration: {}, good K: {}, time: {:.2f}, improvement: {:.4f}'.format(i, bnmf.good_k.shape[0], t, improvement)
+    if improvement < threshold:
+        break
+
+# <codecell>
+
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 print diff(obj)
-plot(obj)
+plot(obj[2:])
 pass
 
 # <codecell>
 
+good_k = bnmf.good_k
 cutoff= 60 #db
 threshold = 10**(-cutoff/20)
 ## Original v.s. Reconstruction
@@ -115,20 +102,13 @@ plot_decomp(args=({'D':20*log10(tmpED[:,good_k[idx]]), 'T':'ED'},
             {'D':(around(bnmf.EZ)*bnmf.ES)[good_k[idx],:], 'T':'ES*EZ'}), cmap=cm.hot_r)
 figure(3)
 plot(flipud(sort(bnmf.Epi[good_k])), '-o')
+title('Expected membership prior Pi')
 
 # <codecell>
 
-idx = flipud(argsort(bnmf.Epi[good_k]))
-figure(1)
-plot_decomp(args=({'D':bnmf.ED[:,good_k[idx]], 'T':'ED'}, {'D':D[:,:L], 'T':'D'}))
-figure(2)
-plot_decomp(args=({'D':around(bnmf.EZ[good_k[idx],:]), 'T':'EZ'}, {'D':Z[:good_k.shape[0],:], 'T':'Z'}))
-figure(3)
-plot_decomp(args=({'D':(around(bnmf.EZ)*bnmf.ES)[good_k[idx],:], 'T':'ES*EZ'}, {'D':(S*Z)[:good_k.shape[0],:], 'T':'S*Z'}))
-
-# <codecell>
-
-good_k.shape
+#plot_decomp(args=((bnmf.ES*bnmf.EZ)[good_k[idx],:400],), cmap=cm.jet)
+imshow((bnmf.ES*bnmf.EZ)[good_k[idx],:400], cmap=cm.jet, aspect='auto', origin='lower', interpolation='nearest')
+colorbar()
 
 # <codecell>
 
@@ -139,6 +119,7 @@ print amax(bnmf.ED), amin(bnmf.ED)
 
 # <codecell>
 
+## Compare with regular NMF
 import pymf
 nmf = pymf.NMF(X, num_bases=good_k.shape[0], niter=500)
 nmf.initialization()
@@ -147,6 +128,7 @@ nmf.factorize()
 # <codecell>
 
 figure(1)
+nmf.W[nmf.W < 1e-3] = 1e-3
 plot_decomp(args=(20*log10(nmf.W), 20*log10(bnmf.ED[:,good_k])), cmap=cm.hot_r)
 figure(2)
 plot_decomp(args=(nmf.H, bnmf.ES[good_k,:]*around(bnmf.EZ[good_k,:])), cmap=cm.hot_r)
@@ -161,31 +143,31 @@ def separate(W, H, save=True):
     L = W.shape[1]
     for l in xrange(L): 
         XL = Xc * np.outer(W[:,l], H[l,:])/den
-        xl.append(librosa.istft(XL, n_fft=256))
+        xl.append(librosa.istft(XL, n_fft=n_fft))
     if save:
         sio.savemat('xl.mat', {'xl':np.array(xl)})
     return np.array(xl)
-xl_bp = separate(bnmf.ED[:,good_k], bnmf.ES[good_k,:]*around(bnmf.EZ[good_k,:]))
+xl_bp = separate(bnmf.ED[:,good_k[idx]], bnmf.ES[good_k[idx],:]*around(bnmf.EZ[good_k,:]))
 #xl_nmf = separate(nmf.W, nmf.H)
 
 # <codecell>
 
+sio.savemat('bnmf.mat', {'ED':bnmf.ED[:,good_k[idx]], 'ESZ':around(bnmf.EZ[good_k[idx],:])*bnmf.ES[good_k[idx],:]})
+
+# <codecell>
+
+## only works for 44.1kHz
 import scikits.audiolab as audiolab
 for i in xrange(good_k.shape[0]):
     audiolab.play(xl_bp[i,:])
 
 # <codecell>
 
-print sort(bnmf.Epi)[:20]
-print max(bnmf.Epi)/min(bnmf.Epi), min(bnmf.Epi)
-bnmf.Epi < 1e-3*max(bnmf.Epi)
-plot(flipud(sort(bnmf.Epi/max(bnmf.Epi))), '-o')
-pass
-
-# <codecell>
-
-plot_decomp(args=({'D':around(bnmf.EZ[good_k[idx],:]), 'T':'EZ'},))
-#print bnmf.EZ.shape
+## save as a Picked object
+def save_object(obj, filename):
+    with open(filename, 'wb') as output:
+        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
+save_object(bnmf, 'bnmf_bassoon_20N')
 
 # <codecell>
 

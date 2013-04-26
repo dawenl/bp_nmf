@@ -1,0 +1,223 @@
+\documentclass[11pt]{article} % For LaTeX2e
+\linespread{1}
+\usepackage[top=1in, bottom=1in, left=1in, right=1in]{geometry}
+
+\usepackage{times, amsmath, epsfig, graphicx, subcaption,url}
+\usepackage{bm}
+\usepackage{enumerate}
+\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\newcommand{\tabincell}[2]{\begin{tabular}{@{}#1@{}}#2\end{tabular}}  
+
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\title{BP-NMF Variational Inference}
+\author{
+Dawen Liang (dl2771)
+}\date{}                                           % Activate to display a given date or no date
+
+\begin{document}
+\maketitle
+
+\section{Problem Setting}\label{sec:1} 
+\[
+\mathbf{X} = \mathbf{D} (\mathbf{S} \odot \mathbf{Z}) + \mathbf{E}
+\]
+where $\mathbf{X} \in \mathbb{R}_+^{F \times T}$ is input spectrogram, $\mathbf{D} \in \mathbb{R}_+^{F \times K}$ is dictionary with $K$ items. $\mathbf{S} \in \mathbb{R}_+^{K \times T}$ is the activation and $\mathbf{Z} \in \{0, 1\}^{K \times T}$ is binary mask which is sparsely constructed. $\mathbf{E} \in \mathbb{R}^{F \times T}$ is Gaussian random noise. 
+
+The model is specified as follows:
+\begin{align*}
+\boldsymbol{x}_t = &~ \mathbf{D}(\boldsymbol{s}_t \odot \boldsymbol{z}_t) + \epsilon_t\\
+\log (\boldsymbol{d}_k) \sim &~ \mathcal{N}(0, \mathbf{I}_F)\\ 
+ \boldsymbol{s}_t \sim &~ \Gamma(\alpha, \alpha / \boldsymbol{s}_{t-1})\\
+\bm{z}_{k} \sim &~ \textrm{Bernoulli}(\pi_k)\\
+\pi_k \sim &~ \textrm{Beta}(\frac{a_0}{K}, \frac{b_0 (K-1)}{K})\\
+\bm{\epsilon}_t \sim &~ \mathcal{N}(0, \gamma_\epsilon^{-1} \mathbf{I}_F)\\
+\gamma_\epsilon \sim &~ \Gamma(c_0, d_0)
+\end{align*}
+
+Notation:
+Capital bold letters represent matrices (e.g. $\mathbf{X}, \mathbf{D}$) while lower case bold letters (e.g. $\bm{x}$, $\bm{s}$, and $\bm{z}$) can represent either rows or columns, based on the indices. For example, as $\mathbf{X} \in \mathbb{R}^{F \times T}$, $\bm{x}_f$ represents the $f$th row while $\bm{x}_t$ represents $t$th column.
+
+
+\section{Laplace Approximation Variational Inference}
+Since the method used requires the continuous variables being real-valued, thus we re-parametrize the model parameters $\Theta = \{\mathbf{D}, \mathbf{S}, \mathbf{Z}, \bm{\pi}, \gamma_\epsilon\}$ as $\{\mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \bm{\pi}, \gamma_\epsilon\}$, where $\mathbf{\Phi} \in \mathbb{R}^{F\times K}$ with $\Phi_{fk} = \log(D_{fk})$ and $\mathbf{\Psi} \in \mathbb{R}^{K \times T}$ with $\Psi_{kt} = \log(S_{kt})$.
+The variational distribution: 
+\[
+q(\Theta) = \prod_{k=1}^K \prod_{f=1}^F  \prod_{t=1}^T q(\Phi_{fk}) q(\Psi_{kt}) q(Z_{kt}) q(\pi_k) q(\gamma_\epsilon)
+\]
+where the variational distributions are specified as follows:
+\begin{align*}
+q(\Phi_{fk}) &\sim \mathcal{N}(\mu_{fk}^{(\Phi)}, 1/\gamma_{fk}^{(\Phi)})\\
+q(\Psi_{kt}) &\sim \mathcal{N}(\mu_{kt}^{(\Psi)}, 1/\gamma_{kt}^{(\Psi)})\\
+q(Z_{kt}) &\sim \textrm{Bernoulli}(p_{kt}^{(z)})\\
+q(\pi_{k}) &\sim \textrm{Beta}(\alpha_k^{(\pi)}, \beta_k^{(\pi)})\\
+q(\gamma_\epsilon) &\sim \Gamma(\alpha^{(\epsilon)}, \beta^{(\epsilon)})
+\end{align*}
+
+Thus the evidence lower bound (ELBO):
+\begin{align*}
+\log(P(\mathbf{X})) &\geq \mathbb{E}_q [\log P(\mathbf{X}, \Theta)] - \mathbb{E}_q [\log q(\Theta)]\\
+&= \mathbb{E}_q [\log P(\mathbf{X} | \mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \gamma_\epsilon)] + \mathbb{E}_q [\log P(\mathbf{\Phi})] + \sum_{t=1}^T \mathbb{E}_q [\log P(\bm{\psi}_t | \bm{\psi}_{t-1})]\\
+ &+ \mathbb{E}_q[\log P(\mathbf{Z} | \bm{\pi})] + \mathbb{E}_q[\log P(\bm{\pi})] + \mathbb{E}_q[\log P(\gamma_\epsilon)] + \mathbb{H}_q [q(\Theta)] 
+\end{align*}
+
+
+\subsection{Update $\mathbf{\Phi}$}\label{sec:phi}
+\begin{align*}
+q(\Phi_{fk}) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-\Phi_{fk}}\}\\
+&\propto \exp\{\langle \log P(\bm{x}_f | \bm{\phi}_f, \bm{\Psi}, \mathbf{Z}, \gamma_\epsilon)\rangle + \langle \log P(\Phi_{fk}) \rangle\}\\
+&= \exp\{f(\Phi_{fk})\}
+\end{align*}
+where $\langle \cdot \rangle_{-\theta}$ indicates taking expectation w.r.t $q(\Theta)$ except $q(\theta)$. For simplicity, we will omit subscript $-\theta$ when there is no ambiguity.
+
+A lot of the terms in the first line do not depend on $\Phi_{fk}$, thus we can simplify them as the second line. Furthermore, $\langle \log P(\Phi_{fk}) \rangle = \log P(\Phi_{fk})$. Thus we just need to find the expression for $\langle \log P(\bm{x}_f | \bm{\phi}_f, \bm{\Psi}, \mathbf{Z}, \gamma_\epsilon)\rangle$:
+\[
+\langle \log P(\bm{x}_f | \bm{\phi}_f, \bm{\Psi}, \mathbf{Z}, \gamma_\epsilon)\rangle = \sum_{t=1}^T \langle \log P(X_{ft} | \bm{\phi}_f, \bm{\psi}_{t}, \bm{z}_{t}, \gamma_\epsilon)\rangle
+\]
+We can write $P(X_{ft} | \bm{\phi}_f, \bm{\psi}_{t}, \bm{z}_{t}, \gamma_\epsilon)$ as exponential family form and thus:
+\[
+\langle \log P(X_{ft} | \bm{\phi}_f, \bm{\psi}_{t}, \bm{z}_{t}, \gamma_\epsilon) \rangle = \log h(X_{ft}) + \langle \eta(\bm{\phi}_f, \bm{\psi}_t, \bm{z}_t, \gamma_\epsilon)^T \rangle T(X_{ft}) - \langle A(\eta) \rangle
+\]
+%where 
+%\begin{align*}
+%h(X_{ft}) &= \frac{1}{\sqrt{2\pi}}\\
+%\eta(\bm{\phi}_f, \bm{\psi}_{t}, \bm{z}_{t}, \gamma_\epsilon) &= \begin{bmatrix}
+%\exp(\bm{\phi}_f)(\exp(\bm{\psi}_t)\odot \bm{z}_t)\gamma_\epsilon\\[0.3em]
+%-\frac{1}{2}\gamma_\epsilon\\
+%\end{bmatrix}\\
+%T(X_{ft}) &= \begin{bmatrix}
+%X_{ft}\\[0.3em]
+%X_{ft}^2\\
+%\end{bmatrix}\\
+%A(\eta) &= \frac{1}{2}[\exp(\bm{\phi}_f)(\exp(\bm{\psi}_t)\odot \bm{z}_t)]^2 \gamma_\epsilon - \frac{1}{2} \log \gamma_\epsilon
+%\end{align*}
+Both of $\langle \eta(\bm{\phi}_f, \bm{\psi}_t, \bm{z}_t, \gamma_\epsilon) \rangle$ and $\langle A(\eta) \rangle$ can be computed in closed form.
+%\begin{align*}
+%\langle \eta(\bm{\phi}_f, \bm{\psi}_t, \bm{z}_t, \gamma_\epsilon) \rangle &= \begin{bmatrix}
+%     \langle \gamma_\epsilon \rangle \sum_{j=1}^K \langle \exp(\Phi_{fj}) \rangle \langle \exp(\Psi_{jt}) \rangle \langle Z_{jt} \rangle \\[0.3em]
+%-\frac{1}{2}\langle \gamma_\epsilon \rangle\\
+%       \end{bmatrix}\\
+%\langle A(\eta) \rangle =& \frac{1}{2} \langle \gamma_\epsilon \rangle \biggl\{ \sum_{j=1}^K \langle \exp(2\Phi_{fj}) \rangle \langle \exp(2\Psi_{jt}) \rangle \langle Z_{jt} \rangle +\\
+%& 2\sum_{j=1}^{K-1}\sum_{l=j+1}^K  \langle \exp(\Phi_{fj}) \rangle \langle \exp(\Psi_{jt}) \rangle \langle Z_{jt} \rangle  \langle \exp(\Phi_{fl}) \rangle \langle \exp(\Psi_{lt}) \rangle \langle Z_{lt} \rangle  \biggl\} - \frac{1}{2} \langle \log \gamma_\epsilon \rangle
+%\end{align*}
+Put them together and only keep the terms which depends on $\Phi_{fk}$ \footnote{If a r.v. $\theta \sim \mathcal{N}(\mu, 1/\gamma)$, then make use of the property of log-normal distribution:
+\begin{align*}
+\mathbb{E}[\exp(\theta)]  &= \exp(\mu + 1/(2\gamma))\\
+\mathbb{E}[\exp(2\theta)] &= \exp(2\mu + 2/\gamma)\\
+\mathbb{E}[\exp(-\theta)] &= \exp(-\mu + 1/(2\gamma)) \text{ $\leftarrow$ Used later for $\Psi$}
+\end{align*}
+}:
+\begin{align*}
+f(\Phi_{fk}) \propto & \langle \gamma_{\epsilon} \rangle \exp(\Phi_{fk}) \sum_{t=1}^T \langle \exp(\Psi_{kt}) \rangle \langle Z_{kt} \rangle
+\langle \hat{X}_{ft}^{-k} \rangle \\
+& -\frac{1}{2}  \langle \gamma_{\epsilon} \rangle \exp(2\Phi_{fk}) \sum_{t=1}^T \langle \exp(2\Psi_{kt}) \rangle \langle Z_{kt} \rangle - \frac{1}{2}\Phi_{fk}^2
+\end{align*}
+where $\hat{X}_{ft}^{-k}  = X_{ft} - \sum_{j\neq k}  \exp(\Phi_{fj}) \exp(\Psi_{jt}) Z_{jt}$. Note except the last term, all the terms have the form of $\alpha\exp(\beta \Phi_{fk})$, which means the first and second order derivative will have the exact same form with constant scalar. For variational update,
+\begin{align*}
+\mu_{fk}^{(\Phi)} &\leftarrow \hat{\Phi}_{fk}, \text{ where }  \frac{\partial f}{\partial \Phi_{fk}} (\hat{\Phi}_{fk}) = 0 \\
+\gamma_{fk}^{(\Phi)} &\leftarrow -\frac{\partial f^2}{\partial^2 \Phi_{fk}} (\hat{\Phi}_{fk})
+\end{align*}
+
+
+\subsection{Update $\mathbf{\Psi}$}
+\begin{align*}
+q(\Psi_{kt}) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-\Psi_{kt}}\}\\
+&\propto \exp\{\langle \log P(\bm{x}_t | \mathbf{\Phi}, \bm{\psi}_t, \mathbf{z}_t, \gamma_\epsilon)\rangle + \langle \log P(\Psi_{kt} | \Psi_{k(t-1)}) \rangle + \langle \log P(\Psi_{k(t+1)} | \Psi_{kt}) \rangle\}\\
+&= \exp\{f(\Psi_{kt})\}
+\end{align*}
+
+Since $S_{kt}$ is gamma distributed, $\Psi_{kt} = \log S_{kt}$ is log-gamma distributed:
+\begin{align*}
+P(\Psi_{kt} | \Psi_{k(t-1)} ) &= \frac{\alpha^\alpha}{\exp(\alpha \Psi_{k(t-1)}) \Gamma(\alpha)} \exp(\alpha \Psi_{kt} - \frac{\alpha}{\exp(\Psi_{k(t-1)})} \exp(\Psi_{kt}))\\
+&= h(\Psi_{kt}) \exp[\eta(\alpha, \Psi_{k(t-1)})^T \cdot T(\Psi_{kt}) - A(\eta)]
+\end{align*}
+%where 
+%\begin{align*}
+%h(\Psi_{kt}) &= 1\\
+%\eta(\alpha, \Psi_{k(t-1)}) &= \begin{bmatrix}\alpha\\
+%-\frac{\alpha}{\exp(\Psi_{k(t-1)})} \\[0.3em]
+%\end{bmatrix}\\[0.3em]
+%T(\Psi_{kt}) &= \begin{bmatrix}
+%\Psi_{kt}\\[0.3em]
+%\exp(\Psi_{kt})\\[0.3em]
+%\end{bmatrix}\\
+%A(\eta) &= \alpha \Psi_{k(t-1)} + \log \Gamma(\alpha) - \alpha \log\alpha
+%\end{align*}
+
+Thus, 
+\[
+\langle \log P(\Psi_{kt} | \Psi_{k(t-1)}) \rangle \propto \alpha \Psi_{kt} - \alpha \langle \exp(-\Psi_{k(t-1)}) \rangle \exp(\Psi_{kt})
+\]
+Similarly,
+\[
+\langle \log P(\Psi_{k(t+1)} | \Psi_{kt}) \rangle \propto -\alpha \langle \exp(\Psi_{k(t+1)}) \rangle \exp(-\Psi_{kt}) - \alpha \Psi_{kt}
+\]
+
+As for $\langle \log P(\bm{x}_t | \mathbf{\Phi}, \bm{\psi}_t, \mathbf{z}_t, \gamma_\epsilon)\rangle$, this can be obtained in a similar fashion as in Section \ref{sec:phi}. Therefore, the update for $\Psi_{kt}$:
+\begin{align*}
+\mu_{kt}^{(\Psi)} &\leftarrow \hat{\Psi}_{kt}, \text{ where }  \frac{\partial f}{\partial \Psi_{kt}} (\hat{\Psi}_{kt}) = 0 \\
+\gamma_{kt}^{(\Psi)} &\leftarrow -\frac{\partial f^2}{\partial^2 \Psi_{kt}} (\hat{\Psi}_{kt})
+\end{align*}
+
+\subsection{Update $\mathbf{Z}$}
+\begin{align*}
+q(Z_{kt}) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-Z_{kt}}\}\\
+&\propto \exp\{\langle \log P(\bm{x}_t | \mathbf{\Phi}, \bm{\psi}_t, \mathbf{z}_t, \gamma_\epsilon)\rangle + \langle \log P(Z_{kt} | \pi_k) \rangle \}
+\end{align*}
+
+We can have close-form update for $Z_{kt}$. When $Z_{kt} = 1$, 
+\begin{align*}
+\log q(Z_{kt}) \propto P_1 &= \langle \log \pi_k \rangle + \langle \gamma_\epsilon \rangle \sum_{f=1}^F \{ \langle \exp(\Phi_{fk}) \rangle \langle \exp(\Psi_{kt})  \rangle \langle \hat{X}_{ft}^{-k}\rangle - \frac{1}{2}\langle \exp(2\Phi_{fk}) \rangle \langle\exp(2\Psi_{kt})  \rangle\}
+\end{align*}
+
+Else, if $Z_{kt} = 0$,
+\[
+\log q(Z_{kt}) \propto P_0 = \langle \log (1-\pi_k) \rangle
+\]
+where 
+\[
+\langle \log \pi_k \rangle = \psi\big(\alpha_k^{(\pi)}\big) - \psi\big(\alpha_k^{(\pi)} + \beta_k^{(\pi)}\big)
+\]
+\[
+\langle \log(1- \pi_k) \rangle = \psi\big(\beta_k^{(\pi)}\big) - \psi\big(\alpha_k^{(\pi)} + \beta_k^{(\pi)}\big)
+\]
+here $\psi(\cdot)$ represents digamma function. 
+Therefore, 
+\[
+p_{kt}^{(z)} \leftarrow \frac{\exp(P_1)}{\exp(P_0) + \exp(P_1)}
+\]
+
+\subsection{Update $\bm{\pi}$}
+\begin{align*}
+q(\pi_k) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-\pi_k}\}\\
+&\propto \exp\{\langle \log P(\bm{z}_{k} | \pi_k) \rangle + \langle \log P(\pi_k | a_0, b_0, K) \rangle \}
+\end{align*}
+
+This part of the model enjoys the conjugacy between Beta distribution and Bernoulli distribution. Therefore, the closed form update:
+\begin{align*}
+\alpha_k^{(\pi)} &\leftarrow \frac{a_0}{K} + \sum_{t=1}^T \langle Z_{kt} \rangle\\
+\beta_k^{(\pi)} &\leftarrow \frac{b_0 (K-1)}{K} + T - \sum_{t=1}^T \langle Z_{kt} \rangle
+\end{align*}
+
+\subsection{Update $\gamma_\epsilon$}
+\begin{align*}
+q(\gamma_\epsilon) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-\gamma_\epsilon}\}\\
+&\propto \exp\{\langle \log P(\mathbf{X} | \mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z},  \gamma_\epsilon)\rangle + \langle \log P(\gamma_\epsilon | c_0, d_0) \rangle \}
+\end{align*}
+
+This part of the model is also conjugate, between the precision of the normal distribution and gamma distribution. Therefore, the closed form update:
+\begin{align*}
+\alpha^{(\epsilon)} &\leftarrow  c_0 + \frac{1}{2} FT\\
+\beta^{(\epsilon)} &\leftarrow d_0 + \frac{1}{2}\sum_{t=1}^T \parallel \bm{x}_t - \langle \exp(\mathbf{\Phi}) ( \exp(\bm{\psi}_t) \odot  \bm{z}_t ) \rangle \parallel_2^2
+\end{align*}
+
+
+\bibliographystyle{plain}
+\bibliography{bp_nmf}
+\end{document}  

@@ -10,7 +10,7 @@ import numpy as np
 import scipy.optimize, scipy.special
 
 class Bp_NMF:
-    def __init__(self, X, K=512, init_option='Rand', RSeed=np.random.seed(), **kwargs):
+    def __init__(self, X, K=512, init_option='Rand', encoding=False, RSeed=np.random.seed(), **kwargs):
         '''
         BN = Bp_NMF(X, K=512, init_option='Rand', RSeed=np.random.seed(), alpha=2., a0=1., b0=1., c0=1e-6, d0=1e-6)
 
@@ -42,7 +42,7 @@ class Bp_NMF:
         self.F, self.T = self.X.shape
         self.K = K
         self._parse_args(**kwargs)
-        self._init(init_option)
+        self._init(init_option, encoding)
 
     def _parse_args(self, **kwargs):
         if 'alpha' in kwargs:
@@ -60,33 +60,32 @@ class Bp_NMF:
         else:
             self.c0, self.d0 = 1e-6, 1e-6
 
-    def _init(self, init_option):
+    def _init(self, init_option, encoding):
         if init_option == 'Rand':
             print 'Init with Rand...'
-            # variational parameters for D (Phi)
-            self.mu_phi = np.random.randn(self.F, self.K)
-            self.r_phi = np.random.gamma(2, size=(self.F, self.K))
+            if ~encoding:
+                # variational parameters for D (Phi)
+                self.mu_phi = np.random.randn(self.F, self.K)
+                self.r_phi = np.random.gamma(2, size=(self.F, self.K))
+                self.ED, self.ED2, _ = self._exp(self.mu_phi, self.r_phi)
             # variational parameters for S (Psi)
             self.mu_psi = np.random.randn(self.K, self.T)
             self.r_psi = np.random.gamma(2, size=(self.K, self.T))
+            self.ES, self.ES2, self.ESinv = self._exp(self.mu_psi, self.r_psi)
             # variational parameters for Z
             self.p_z = np.random.rand(self.K, self.T)
+            self.EZ = self.p_z
             # variational parameters for pi
             self.alpha_pi = np.random.rand(self.K)
             self.beta_pi = np.random.rand(self.K)
+            self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
             # variational parameters for gamma
             self.alpha_g, self.beta_g = np.random.gamma(100, 1./100), np.random.gamma(100, 1./100)
-
-            # init the expectations
-            self.ED, self.ED2, _ = self._exp(self.mu_phi, self.r_phi)
-            self.ES, self.ES2, self.ESinv = self._exp(self.mu_psi, self.r_psi)
-            self.EZ = self.p_z
-            self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
             self.Eg = self.alpha_g / self.beta_g
 
         if init_option == 'NMF':
             import pymf
-            n_basis = min(self.K, self.T) 
+            n_basis = min(self.K, self.T, 100) 
             print 'Init with NMF ({} basis)...'.format(n_basis)
             nmf = pymf.NMF(self.X, num_bases=n_basis, niter=100)
             nmf.initialization()
@@ -111,7 +110,7 @@ class Bp_NMF:
             self.Epi = np.zeros((self.K,))
             self.Epi[:self.T] = 1
             # variational parameter for gamma
-            self.alpha_g, self.beta_g = np.random.gamma(100, 1./100), np.random.gamma(100, 1./100)
+            self.alpha_g, self.beta_g = np.random.gamma(100, 1./1000), np.random.gamma(100, 1./1000)
             self.Eg = 1./np.var(self.X - np.dot(self.ED, self.ES*self.EZ))
         self.good_k = np.arange(self.K)
 
@@ -131,7 +130,7 @@ class Bp_NMF:
             self.update_phi(k)
             self.update_z(k)
             self.update_psi(k, timed=timed)
-            if verbose:
+            if verbose and k % 5 == 0:
                 sys.stdout.write('.')
         if verbose:
             sys.stdout.write('\n')
@@ -140,6 +139,21 @@ class Bp_NMF:
         self.update_r()
         # truncate the rarely used elements
         self.good_k = np.delete(good_k, np.where(self.Epi[good_k] < 1e-3*np.max(self.Epi[good_k])))
+        self._lower_bound(timed=timed)
+
+    def encode(self, timed=False, verbose=True):
+        print 'Updating ZS...'
+        good_k = self.good_k
+        for k in good_k:
+            self.update_z(k)
+            self.update_psi(k, timed=timed)
+            if verbose and k % 5 == 0:
+                sys.stdout.write('.')
+        if verbose:
+            sys.stdout.write('\n')
+        print 'Update pi and gamma...'
+        self.update_pi()
+        self.update_r()
         self._lower_bound(timed=timed)
         
     def update_phi(self, k):
@@ -302,6 +316,10 @@ class Bp_NMF:
             self.ES[k,ts], self.ES2[k,ts], self.ESinv[k,ts] = self._exp(self.mu_psi[k,ts], self.r_psi[k,ts])
             if ~np.alltrue(~np.isinf(self.ES[k,ts])):
                 print 'Inf ES'
+            if ~np.alltrue(~np.isinf(self.ES2[k,ts])):
+                print 'Inf ES2'
+            if ~np.alltrue(~np.isinf(self.ESinv[k,ts])):
+                print 'Inf ESinv'
 
     def update_pi(self):
         self.alpha_pi = self.a0/self.K + np.sum(self.EZ, axis=1)

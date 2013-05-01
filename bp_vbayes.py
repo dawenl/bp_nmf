@@ -127,9 +127,11 @@ class Bp_NMF:
         print 'Updating DZS...'
         good_k = self.good_k
         for k in good_k:
-            self.update_phi(k)
+            ind_phi = self.update_phi(k)
             self.update_z(k)
-            self.update_psi(k, timed=timed)
+            ind_psi = self.update_psi(k, timed=timed)
+            if ind_phi == -1 or ind_psi == -1:
+                return -1
             if verbose and k % 5 == 0:
                 sys.stdout.write('.')
         if verbose:
@@ -140,13 +142,16 @@ class Bp_NMF:
         # truncate the rarely used elements
         self.good_k = np.delete(good_k, np.where(self.Epi[good_k] < 1e-3*np.max(self.Epi[good_k])))
         self._lower_bound(timed=timed)
+        return 0
 
     def encode(self, timed=False, verbose=True):
         print 'Updating ZS...'
         good_k = self.good_k
         for k in good_k:
             self.update_z(k)
-            self.update_psi(k, timed=timed)
+            ind_psi = self.update_psi(k, timed=timed)
+            if ind_psi == -1:
+                return -1
             if verbose and k % 5 == 0:
                 sys.stdout.write('.')
         if verbose:
@@ -155,6 +160,7 @@ class Bp_NMF:
         self.update_pi()
         self.update_r()
         self._lower_bound(timed=timed)
+        return 0
         
     def update_phi(self, k):
         def f_stub(phi):
@@ -192,7 +198,9 @@ class Bp_NMF:
                 print 'ES no NAN: {}'.format(np.alltrue(~np.isnan(self.ES[good_k,:])))
                 print 'EZ no NAN: {}'.format(np.alltrue(~np.isnan(self.EZ[good_k,:])))
                 print 'EX no NAN: {}'.format(np.alltrue(~np.isnan(np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]))))
+            return -1
         self.ED[:,k], self.ED2[:,k], _ = self._exp(self.mu_phi[:,k], self.r_phi[:,k])
+        return 0
   
     def update_z(self, k):
         good_k = self.good_k
@@ -205,9 +213,9 @@ class Bp_NMF:
 
     def update_psi(self, k, timed=False):
         if timed:
-            self._update_psi_time(k)
+            return self._update_psi_time(k)
         else:
-            self._update_psi_ntime(k)
+            return self._update_psi_ntime(k)
 
     def _update_psi_ntime(self, k):
         def f_stub(psi):
@@ -239,7 +247,9 @@ class Bp_NMF:
                 print 'S[{}, :]: {}'.format(k, d['task'])
             else:
                 print 'S[{}, :]: {}'.format(k, d['warnflag'])
+            return -1
         self.ES[k,:], self.ES2[k,:], self.ESinv[k,:] = self._exp(self.mu_psi[k,:], self.r_psi[k,:])
+        return 0
 
     def _update_psi_time(self, k):
         def f_stub(psi):
@@ -313,13 +323,18 @@ class Bp_NMF:
                     print 'S[{}, :]:{}, f={}'.format(k, d['task'], f(mu_hat))
                 else:
                     print 'S[{}, :]:{}, f={}'.format(k, d['warnflag'], f(mu_hat))
+                return -1
             self.ES[k,ts], self.ES2[k,ts], self.ESinv[k,ts] = self._exp(self.mu_psi[k,ts], self.r_psi[k,ts])
             if ~np.alltrue(~np.isinf(self.ES[k,ts])):
                 print 'Inf ES'
+                return -1
             if ~np.alltrue(~np.isinf(self.ES2[k,ts])):
                 print 'Inf ES2'
+                return -1
             if ~np.alltrue(~np.isinf(self.ESinv[k,ts])):
                 print 'Inf ESinv'
+                return -1
+            return 0
 
     def update_pi(self):
         self.alpha_pi = self.a0/self.K + np.sum(self.EZ, axis=1)

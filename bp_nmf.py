@@ -135,7 +135,7 @@ bar(arange(std_col.shape[0]), std_col)
 
 tmpED = bnmf.ED.copy()
 tmpED /= np.sum(tmpED**2, axis=0)**0.5
-plot_decomp(args=(dot(tmpED[:,good_k[idx]].T, tmpED[:,good_k[idx]]),))
+plot_decomp(args=(dot(tmpED[:,good_k[idx]].T, tmpED[:,good_k[idx]]),), cmap=cm.hot_r)
 
 # <codecell>
 
@@ -194,7 +194,7 @@ for i in xrange(good_k.shape[0]):
 def save_object(obj, filename):
     with open(filename, 'wb') as output:
         pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
-save_object(bnmf, 'bnmf_mix5a_R_1N19T_Scale')
+save_object(bnmf, 'bnmf_PinkMoon_R_1N19T_Scale')
 
 # <codecell>
 

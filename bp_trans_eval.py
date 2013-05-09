@@ -21,7 +21,7 @@ n_fft = 512
 hop_length = 512
 
 ## Model parameters
-is_timed = True
+is_timed = False
 
 K = 512
 init_option = 'Rand'

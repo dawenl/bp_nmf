@@ -6,8 +6,10 @@ CREATED: 2013-05-02 05:14:35 by Dawen Liang <dl2771@columbia.edu>
 
 import functools, midi, pickle, time
 import numpy as np
+import numpy.fft as fft
 import matplotlib.pyplot as plt
 import scipy.io as sio
+import scipy.signal
 
 import bp_vbayes
 import librosa
@@ -29,6 +31,108 @@ def logspec(X, amin=1e-10, dbdown=80):
     '''
     logX = 20 * np.log10(np.maximum(X, amin))
     return np.maximum(logX, logX.max() - dbdown)
+
+def stft(y, n_fft=256, hann_w=None, hop_length=None):
+    """Short-time fourier transform
+
+    Arguments:
+      y           -- (ndarray)  the input signal
+      n_fft       -- (int)      number of FFT components  | default: 256
+      hann_w      -- (int)      size of Hann window       | default: n_fft
+      hop_length  -- (int)      number audio of frames 
+                                between STFT columns      | default: hann_w / 2
+
+    Returns D:
+      D           -- (ndarray)  complex-valued STFT matrix
+
+    """
+    num_samples = len(y)
+
+    if hann_w is None:
+        hann_w = n_fft
+
+    if np.shape(hann_w) == 0:
+        if hann_w == 0:
+            window = np.ones((n_fft,))
+        else:
+            lpad = (n_fft - hann_w)/2
+            window = np.pad( scipy.signal.hann(hann_w), 
+                                (lpad, n_fft - hann_w - lpad), 
+                                mode='constant')
+    else:
+        window = hann_w
+
+    # Set the default hop, if it's not already specified
+    if hop_length is None:
+        hop_length = int(n_fft / 2)
+
+    n_specbins  = 1 + int(n_fft / 2)
+    n_frames    = 1 + int( (num_samples - n_fft) / hop_length)
+
+    # allocate output array
+    stft_matrix = np.empty( (n_specbins, n_frames), dtype=np.complex)
+
+    for i in xrange(n_frames):
+        sample  = i * hop_length
+        frame   = fft.fft(window * y[sample:(sample+n_fft)])
+
+        # Conjugate here to match phase from DPWE code
+        stft_matrix[:, i]  = frame[:n_specbins].conj()
+
+    return stft_matrix
+
+def istft(stft_matrix, n_fft=None, hann_w=None, hop_length=None):
+    """
+    Inverse short-time fourier transform
+
+    Arguments:
+      stft_matrix -- (ndarray)  STFT matrix from stft()
+      n_fft       -- (int)      number of FFT components   | default: inferred
+      hann_w      -- (int)      size of Hann window        | default: n_fft
+      hop_length  -- (int)      audio frames between STFT                       
+                                columns                    | default: hann_w / 2
+
+    Returns y:
+      y           -- (ndarray)  time domain signal reconstructed from d
+
+    """
+
+    # n = Number of stft frames
+    n_frames    = stft_matrix.shape[1]
+
+    if n_fft is None:
+        n_fft = 2 * (stft_matrix.shape[0] - 1)
+
+    if hann_w is None:
+        hann_w = n_fft
+    if np.shape(hann_w) == 0:
+        if hann_w == 0:
+            window = np.ones(n_fft)
+        else:
+            #   magic number alert!
+            #   2/3 scaling is to make stft(istft(.)) identity for 25% hop
+            lpad = (n_fft - hann_w)/2
+            window = np.pad( scipy.signal.hann(hann_w) * 2.0 / 3.0, 
+                                (lpad, n_fft - hann_w - lpad), 
+                                mode='constant')
+    else:
+        window = hann_w
+
+    # Set the default hop, if it's not already specified
+    if hop_length is None:
+        hop_length = n_fft / 2
+
+    y = np.zeros(n_fft + hop_length * (n_frames - 1))
+
+    for i in xrange(n_frames):
+        sample  = i * hop_length
+        spec    = stft_matrix[:, i].flatten()
+        spec    = np.concatenate((spec.conj(), spec[-2:0:-1] ), 0)
+        ytmp    = window * fft.ifft(spec).real
+
+        y[sample:(sample+n_fft)] = y[sample:(sample+n_fft)] + ytmp
+
+    return y
 
 def gsubplot(args=(), cmap=plt.cm.gray_r):
     ''' General subplot
@@ -118,32 +222,30 @@ def encode(bnmf, X, K, ED, ED2, init_option, alpha, N, timed, RSeed=np.random.se
         print 'Encoding: Iteration: {}, good K: {}, time: {:.2f}, obj: {}'.format(n, bnmf.good_k.shape[0], t, bnmf.obj)
     return bnmf
 
-def separate(Xc, W, H, n_fft, hop_length, idx_comp=None, save=False, savename=None):
-    ''' Separate copmlex spectrogram into components via Wiener Filter
-    '''
-    x_sep = [] 
-    X_rec = np.maximum(np.dot(W, H), 1e-10)
-    if idx_comp is None:
+def wiener_mask(W, H, idx=None, amin=1e-10):
+    X_rec = np.maximum(np.dot(W, H), amin)
+    if idx is None:
         L = W.shape[1]
-        idx_comp = xrange(L)
-    if len(idx_comp.shape) == 1:
+        idx = np.arange(L)
+    if len(np.shape(idx)) == 0:
         print 'Info: Separate out single component'
-    elif len(idx_comp.shape) == 2:
+        mask = np.maximum(np.outer(W[:, idx], H[idx, :]), amin)
+    elif len(np.shape(idx)) == 1:
         print 'Info: Separate out mixed components'
+        mask = np.maximum(np.dot(W[:, idx], H[idx, :]), amin)
     else:
         print 'Error: Oops, wrong idx_comp dimension'
         return None
-    for l in idx_comp: 
-        if len(np.shape(l)) == 0:
-            X_sep = Xc * np.outer(W[:, l], H[l, :]) / X_rec
-        elif len(np.shape(l)) == 1:
-            X_sep = Xc * np.dot(W[:, l], H[l, :]) / X_rec
-        x_sep.append(librosa.istft(X_sep, n_fft=n_fft, hop_length=hop_length))
-    if save:
-        if savename is None:
-            savename = 'xl.mat'
-        sio.savemat(savename, {'xl':np.array(x_sep)})
-    return np.array(x_sep)
+
+    mask = mask / X_rec
+    return mask
+
+def interp_mask(mask):
+    F, T = mask.shape
+    mask_interp = np.zeros((2*F-1, T))
+    mask_interp[::2,:] = mask
+    mask_interp[1::2,:] = mask[:-1,:] + np.diff(mask, axis=0)/2
+    return mask_interp
 
 def envelope(x, n_fft, hop_length):
     '''Get envlope for a clean monophonic signal

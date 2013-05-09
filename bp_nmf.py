@@ -21,11 +21,11 @@ X = bnmf.X
 
 ## Data pre-processing parameters
 reload(utils)
-ID = 'mix_var5a22k'
+ID = 'demo'
 filename = '../data/{}.wav'.format(ID)
 n_fft = 512
-hop_length = 512
-reweight = True
+hop_length = 512/2
+reweight = False
 X, std_col = utils.get_data(filename, n_fft, hop_length, reweight=reweight)
 
 ## Model training parameters
@@ -39,7 +39,7 @@ timed = utils.gen_train_seq(is_timed, N)
 # <codecell>
 
 objs = empty((N,))
-bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs)
+bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs, RSeed=np.random.seed(357))
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 plot(objs[1:])
@@ -77,10 +77,17 @@ utils.gsubplot(args=(dot(tmpED.T, tmpED),), cmap=cm.hot_r)
 
 # <codecell>
 
-print tmpES.shape
-print bnmf.EZ.shape
 tmpEZ = around(bnmf.EZ[good_k[idx],:])
-plot((tmpEZ * tmpES)[7, :])
+figure(1)
+num = len(good_k)
+for i in xrange(0,2*num,2):
+    subplot(num, 2, i+1)
+    plot(10*log10(tmpED[:, i/2]))
+    subplot(num, 2, i+2)
+    plot((tmpEZ * tmpES)[i/2,:])
+tight_layout()
+
+#sio.savemat('fuck.mat', {'ED', 
 
 # <codecell>
 

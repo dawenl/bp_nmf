@@ -39,8 +39,8 @@ for inst in instruments:
         for j in xrange(n_event):
             dur = (np.arange(round(sr * notes_inst[key][2*j]), round(sr * notes_inst[key][2*j+1])+1)).astype(int)
             data.extend(x[dur])
+            row.extend(len(dur) * [base_idx + i])
             col.extend(dur)
-        row.extend(len(data_row) * [base_idx + i])
     base_idx += len(notes_inst)
 x_notes = scipy.sparse.csr_matrix(scipy.sparse.coo_matrix((data, (row, col)), shape=(n_notes, num_samples)))
 
@@ -50,7 +50,7 @@ x_notes = scipy.sparse.csr_matrix(scipy.sparse.coo_matrix((data, (row, col)), sh
 
 # <codecell>
 
-n_fft = 512
+n_fft = 1024
 hop_length = 512
 n_frames = 1 + int( (num_samples - n_fft) / hop_length)
 X_envelope = np.zeros((n_notes, n_frames))
@@ -65,7 +65,8 @@ X_envelope = (X_envelope - np.mean(X_envelope, axis=1, keepdims=True)) / np.sqrt
 
 # <codecell>
 
-pickle_file = 'exp/transcription/bnmf_mix_Nscale_20N_GK18'
+#pickle_file = 'exp/transcription/bnmf_mix_Nscale_20N_GK18'
+pickle_file = 'bnmf_mix_var5a22k_Nscale_20N_F1024_H512_GK46'
 bnmf = utils.load_object(pickle_file)
 x, sr = librosa.load('../data/mix_var5a22k.wav')
 num_samples = len(x)
@@ -87,7 +88,7 @@ tmpES = (tmpES - np.mean(tmpES, axis=1, keepdims=True)) / np.sqrt(np.var(tmpES, 
 
 # <codecell>
 
-multi2one = False
+multi2one = True
 if multi2one:
     idx_comp = []
     count_comp = []
@@ -97,9 +98,9 @@ if multi2one:
         tmp_idx = flipud(np.argsort(dot(tmpES, X_envelope[i,:])))
         idx_comp.append(tmp_idx[:bound])
         count_comp.extend(tmp_idx[:bound])
-        #figure(i)
-        #plot((dot(tmpES, X_envelope[i,:]))[tmp_idx], '-bx')
-        #plot((dot(tmpES, X_envelope[i,:]))[tmp_idx[:bound]], '-ro')
+        figure(i)
+        plot((dot(tmpES, X_envelope[i,:]))[tmp_idx], '-bx')
+        plot((dot(tmpES, X_envelope[i,:]))[tmp_idx[:bound]], '-ro')
 else:
     idx_comp = np.argmax(dot(tmpES, X_envelope.T), axis=0)
 figure(1)
@@ -111,13 +112,18 @@ pass
 # <codecell>
 
 x_sep = []
+ratio = 2 * hop_length / n_fft
 for i in xrange(n_notes):
     mask = utils.wiener_mask(bnmf.ED[:,good_k[idx]], (around(bnmf.EZ) * bnmf.ES)[good_k[idx],:], idx=idx_comp[i])
-    window = zeros((2*n_fft,))
-    window[:n_fft] = 1
-    X_ola = utils.stft(x, n_fft=2*n_fft, hann_w=window, hop_length=hop_length)
-    mask_interp = utils.interp_mask(mask)
-    x_sep.append(utils.istft(X_ola * mask_interp[:,:X_ola.shape[1]], n_fft=2*n_fft, hop_length=hop_length, hann_w=window))
+    if ratio == 2:
+        window = zeros((2*n_fft,))
+        window[:n_fft] = 1
+        mask_interp = utils.interp_mask(mask)
+    else:
+        window = None
+        mask_interp = mask
+    X_ola = utils.stft(x, n_fft=ratio*n_fft, hann_w=window, hop_length=hop_length)
+    x_sep.append(utils.istft(X_ola * mask_interp[:,:X_ola.shape[1]], n_fft=ratio*n_fft, hop_length=hop_length, hann_w=window))
 x_sep = np.array(x_sep)
 
 # <codecell>

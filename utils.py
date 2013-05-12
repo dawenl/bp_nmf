@@ -8,13 +8,11 @@ import functools, midi, pickle, time
 import numpy as np
 import numpy.fft as fft
 import matplotlib.pyplot as plt
-import scipy.io as sio
 import scipy.signal
 
 import bp_vbayes
 import librosa
 
-specshow_cm = functools.partial(plt.imshow, aspect='auto', origin='lower', interpolation='nearest')
 specshow = functools.partial(plt.imshow, cmap=plt.cm.hot_r, aspect='auto', origin='lower', interpolation='nearest')
 
 def logspec(X, amin=1e-10, dbdown=80):
@@ -142,16 +140,16 @@ def gsubplot(args=(), cmap=plt.cm.gray_r):
     for i in xrange(nargs):
         plt.subplot(nargs, 1, i + 1)
         if type(args[i]) == dict:
-            specshow_cm(args[i]['D'], cmap=cmap)
+            specshow(args[i]['D'], cmap=cmap)
             plt.title(args[i]['T'])
         else:
-            specshow_cm(args[i], cmap=cmap)
+            specshow(args[i], cmap=cmap)
         plt.colorbar()
     plt.tight_layout()
     return
 
-def get_data(filename, n_fft, hop_length, reweight=False, amin=1e-10, dbdown=80):
-    x, _ = librosa.load(filename)
+def get_data(filename, n_fft, hop_length, sr=None, reweight=False, amin=1e-10, dbdown=80):
+    x, _ = librosa.load(filename, sr=sr)
     X = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
     specshow(logspec(X))
     if reweight:
@@ -171,10 +169,10 @@ def gen_train_seq(is_timed, N):
         timed = np.zeros((N,), dtype='bool')
     return timed
 
-def gen_save_name(id, is_timed, reweight, good_k=None):
+def gen_save_name(id, is_timed, reweight, n_fft, hop_length, K, good_k=None):
     str_scaled = 'Scale' if reweight else 'Nscale'
     str_timed = '1N19T' if is_timed else '20N'
-    name = 'bnmf_{}_{}_{}'.format(id, str_scaled, str_timed)
+    name = 'bnmf_{}_{}_{}_F{}_H{}_K{}'.format(id, str_scaled, str_timed, n_fft, hop_length, K)
     if good_k is not None:
         name += '_GK{}'.format(good_k)
     return name

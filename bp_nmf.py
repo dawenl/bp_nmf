@@ -12,19 +12,20 @@ import scipy.io as sio
 # <codecell>
 
 ## Load Pickled data if necessary
-pickle_file = 'exp/transcription/bnmf_mix_Scale_20N_GK62'
+#pickle_file = 'exp/transcription/bnmf_mix_Nscale_20N_GK63'
+pickle_file = 'bnmf_mix_Nscale_20N_GK9'
 bnmf = utils.load_object(pickle_file)
 X = bnmf.X
-#std_col = 1.
+std_col = 1.
 
 # <codecell>
 
 ## Data pre-processing parameters
 reload(utils)
-ID = 'demo'
+ID = 'bassoon'
 filename = '../data/{}.wav'.format(ID)
 n_fft = 512
-hop_length = 512/2
+hop_length = 512
 reweight = False
 X, std_col = utils.get_data(filename, n_fft, hop_length, reweight=reweight)
 
@@ -39,13 +40,15 @@ timed = utils.gen_train_seq(is_timed, N)
 # <codecell>
 
 objs = empty((N,))
-bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs, RSeed=np.random.seed(357))
+bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs)
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 plot(objs[1:])
 pass
 
 # <codecell>
+
+reload(utils)
 
 good_k = bnmf.good_k
 
@@ -92,7 +95,8 @@ tight_layout()
 # <codecell>
 
 ## Save!!
-name = utils.gen_save_name(ID, is_timed, reweight, good_k=bnmf.good_k.shape[0])
+reload(utils)
+name = utils.gen_save_name(ID, is_timed, reweight, n_fft, hop_length, K, good_k=bnmf.good_k.shape[0])
 utils.save_object(bnmf, name)
 
 # <headingcell level=1>

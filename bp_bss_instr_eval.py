@@ -32,8 +32,8 @@ for i in xrange(n_inst):
 
 # <codecell>
 
-n_fft = 512
-hop_length = 512
+n_fft = 2048
+hop_length = 1024
 n_frames = 1 + int( (num_samples - n_fft) / hop_length)
 X_envelope = np.zeros((n_inst, n_frames))
 
@@ -44,7 +44,8 @@ X_envelope = (X_envelope - np.mean(X_envelope, axis=1, keepdims=True)) / np.sqrt
 # <codecell>
 
 reload(utils)
-pickle_file = 'exp/transcription/bnmf_mix_Nscale_20N_GK63'
+#pickle_file = 'exp/transcription/bnmf_mix_Nscale_20N_GK18'
+pickle_file = 'bnmf_mix_var5a22k_Nscale_20N_F1024_H512_GK46'
 bnmf = utils.load_object(pickle_file)
 x, sr = librosa.load('../data/mix_var5a22k.wav')
 num_samples = len(x)
@@ -73,19 +74,22 @@ print notes_count
 
 # <codecell>
 
-idx_comp = []
-count_comp = []
-for i in xrange(n_inst):
-    #tmp = dot(tmpES, X_envelope[i,:])
-    #bound = len(good_k)-1-np.argmax(np.diff((np.sort(tmp))))
-    bound = notes_count[instruments[i]]
-    tmp_idx = flipud(np.argsort(dot(tmpES, X_envelope[i,:])))
-    idx_comp.append(tmp_idx[:bound])
-    count_comp.extend(tmp_idx[:bound])
-    figure(i)
-    plot((dot(tmpES, X_envelope[i,:]))[tmp_idx], '-bx')
-    plot((dot(tmpES, X_envelope[i,:]))[tmp_idx[:bound]], '-ro')
-#idx_comp = np.argmax(dot(tmpES, X_envelope.T), axis=0)
+multi2one = False
+if multi2one:
+    idx_comp = []
+    count_comp = []
+    for i in xrange(n_inst):
+        #tmp = dot(tmpES, X_envelope[i,:])
+        #bound = len(good_k)-1-np.argmax(np.diff((np.sort(tmp))))
+        bound = notes_count[instruments[i]]
+        tmp_idx = flipud(np.argsort(dot(tmpES, X_envelope[i,:])))
+        idx_comp.append(tmp_idx[:bound])
+        count_comp.extend(tmp_idx[:bound])
+        figure(i)
+        plot((dot(tmpES, X_envelope[i,:]))[tmp_idx], '-bx')
+        plot((dot(tmpES, X_envelope[i,:]))[tmp_idx[:bound]], '-ro')
+else:
+    idx_comp = np.argmax(dot(tmpES, X_envelope.T), axis=0)
 #figure(1)
 #hist(np.argmax(dot(tmpES, X_envelope.T), axis=0), bins=len(good_k))
 #figure(2)
@@ -97,13 +101,18 @@ print idx_comp
 # <codecell>
 
 x_sep = []
+ratio = 2 * hop_length / n_fft;
 for i in xrange(n_inst):
     mask = utils.wiener_mask(bnmf.ED[:,good_k[idx]], (around(bnmf.EZ) * bnmf.ES)[good_k[idx],:], idx=idx_comp[i])
-    window = zeros((2*n_fft,))
-    window[:n_fft] = 1
-    X_ola = utils.stft(x, n_fft=2*n_fft, hann_w=window, hop_length=hop_length)
-    mask_interp = utils.interp_mask(mask)
-    x_sep.append(utils.istft(X_ola * mask_interp[:,:X_ola.shape[1]], n_fft=2*n_fft, hop_length=hop_length, hann_w=window))
+    if ratio == 2:
+        window = zeros((2*n_fft,))
+        window[:n_fft] = 1
+        mask_interp = utils.interp_mask(mask)
+    else:
+        window = None
+        mask_interp = mask
+    X_ola = utils.stft(x, n_fft=ratio*n_fft, hann_w=window, hop_length=hop_length)
+    x_sep.append(utils.istft(X_ola * mask_interp[:,:X_ola.shape[1]], n_fft=ratio*n_fft, hop_length=hop_length, hann_w=window))
 x_sep = np.array(x_sep)
 
 # <codecell>
@@ -123,7 +132,7 @@ pass
 
 # <codecell>
 
-sio.savemat('inst.mat', {'x_res':x_res, 'x_inst':x_notes})
+sio.savemat('inst.mat', {'x_res':x_res})
 
 # <codecell>
 

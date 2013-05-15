@@ -21,11 +21,10 @@ std_col = 1.
 # <codecell>
 
 ## Data pre-processing parameters
-reload(utils)
-ID = 'bassoon'
+ID = 'demo'
 filename = '../data/{}.wav'.format(ID)
 n_fft = 512
-hop_length = 512
+hop_length = 256
 reweight = False
 X, std_col = utils.get_data(filename, n_fft, hop_length, reweight=reweight)
 
@@ -47,8 +46,6 @@ plot(objs[1:])
 pass
 
 # <codecell>
-
-reload(utils)
 
 good_k = bnmf.good_k
 

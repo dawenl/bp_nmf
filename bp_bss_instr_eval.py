@@ -3,7 +3,7 @@
 
 # <codecell>
 
-import sys, time, functools, midi, pickle
+import sys, time, midi, pickle
 import scipy.io as sio
 import scipy.sparse
 import bp_vbayes, librosa, utils
@@ -22,30 +22,29 @@ for inst in instruments:
 
 # <codecell>
 
-x_notes = None
+x_inst = None
 for i in xrange(n_inst):
     x, sr = librosa.load('../data/{}_var5a22k.wav'.format(instruments[i]))
     num_samples = len(x)
-    if x_notes is None:
-        x_notes = zeros((n_inst, num_samples))
-    x_notes[i,:] = x
+    if x_inst is None:
+        x_inst = zeros((n_inst, num_samples))
+    x_inst[i,:] = x
 
 # <codecell>
 
-n_fft = 2048
-hop_length = 1024
+n_fft = 512
+hop_length = 512
 n_frames = 1 + int( (num_samples - n_fft) / hop_length)
 X_envelope = np.zeros((n_inst, n_frames))
 
 for i in xrange(n_inst):
-    X_envelope[i,:] = utils.envelope(x_notes[i,:], n_fft, hop_length)
+    X_envelope[i,:] = utils.envelope(x_inst[i,:], n_fft, hop_length)
 X_envelope = (X_envelope - np.mean(X_envelope, axis=1, keepdims=True)) / np.sqrt(np.var(X_envelope, axis=1, keepdims=True))
 
 # <codecell>
 
 reload(utils)
-#pickle_file = 'exp/transcription/bnmf_mix_Nscale_20N_GK18'
-pickle_file = 'bnmf_mix_var5a22k_Nscale_20N_F1024_H512_GK46'
+pickle_file = 'bnmf_mix_var5a22k_Nscale_20N_F512_H512_K512_GK18'
 bnmf = utils.load_object(pickle_file)
 x, sr = librosa.load('../data/mix_var5a22k.wav')
 num_samples = len(x)
@@ -81,7 +80,8 @@ if multi2one:
     for i in xrange(n_inst):
         #tmp = dot(tmpES, X_envelope[i,:])
         #bound = len(good_k)-1-np.argmax(np.diff((np.sort(tmp))))
-        bound = notes_count[instruments[i]]
+        #bound = notes_count[instruments[i]]
+        bound = len(good_k) / 5
         tmp_idx = flipud(np.argsort(dot(tmpES, X_envelope[i,:])))
         idx_comp.append(tmp_idx[:bound])
         count_comp.extend(tmp_idx[:bound])
@@ -124,8 +124,8 @@ x_res[:, :x_sep.shape[1]] = x_sep
 
 snr = []
 for i in xrange(n_inst):
-    noise = x_res[i,:] - x_notes[i,:]
-    snr.append(10*log10(mean(x_notes[i,:]**2)/mean(noise**2)))
+    noise = x_res[i,:] - x_inst[i,:]
+    snr.append(10*log10(mean(x_inst[i,:]**2)/mean(noise**2)))
 print 'Average SNR: {} +- {}'.format(mean(snr), sqrt(var(snr)))
 hist(snr, bins=20)
 pass

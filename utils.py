@@ -4,7 +4,7 @@ CREATED: 2013-05-02 05:14:35 by Dawen Liang <dl2771@columbia.edu>
 
 '''
 
-import functools, midi, pickle, time
+import functools, pickle, time
 import numpy as np
 import numpy.fft as fft
 import matplotlib.pyplot as plt
@@ -12,6 +12,11 @@ import scipy.signal
 
 import bp_vbayes
 import librosa
+
+try:
+    import midi
+except ImportError:
+    print 'Warning: midi module not available' 
 
 specshow = functools.partial(plt.imshow, cmap=plt.cm.hot_r, aspect='auto', origin='lower', interpolation='nearest')
 
@@ -49,7 +54,7 @@ def stft(y, n_fft=256, hann_w=None, hop_length=None):
     if hann_w is None:
         hann_w = n_fft
 
-    if np.shape(hann_w) == 0:
+    if len(np.shape(hann_w)) == 0:
         if hann_w == 0:
             window = np.ones((n_fft,))
         else:
@@ -103,7 +108,7 @@ def istft(stft_matrix, n_fft=None, hann_w=None, hop_length=None):
 
     if hann_w is None:
         hann_w = n_fft
-    if np.shape(hann_w) == 0:
+    if len(np.shape(hann_w)) == 0:
         if hann_w == 0:
             window = np.ones(n_fft)
         else:
@@ -255,7 +260,7 @@ def envelope(x, n_fft, hop_length):
 def midi2notes(filename):
     '''Load a midi file and get the time (in seconds) of each NoteOn and NoteOff (NoteOn with 0 velocity) event
     Only for source separation purposes
-    Strong assumption has made to the input midi file: the first track with time information, the second track with actual notes
+    Strong assumption has made to the input midi file: the first track with information, the second track with actual notes
     '''
     f = midi.read_midifile(filename)
     f.make_ticks_abs()

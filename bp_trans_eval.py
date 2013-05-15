@@ -79,6 +79,10 @@ for inst in instruments:
 
 # <codecell>
 
+utils.specshow(utils.logspec(S))
+
+# <codecell>
+
 idx = zeros((tcount,), dtype='int32')
 base_idx = 0
 for inst in instruments:
@@ -92,13 +96,13 @@ utils.specshow(utils.logspec(tmpD[:128,idx]))
 xval = cumsum(true_count.values())
 xval = hstack((0, xval))
 xval[:-1] = xval[:-1] + diff(xval)/2
-xticks(xval, true_count.keys())
+xticks(xval, true_count.keys(), fontsize=15)
 
 xval = np.roll(cumsum(true_count.values()), 1)
 xval[0] = 0
 for v in xval[1:]:
     axvline(x=v-.4, color='black')
-ylabel('frequency (Hz)')
+ylabel('frequency (Hz)', fontsize=12)
 freq_res = 22050/(512*2)
 yticks(arange(0, 128, 25), freq_res * arange(0, 251, 50))
 tight_layout()
@@ -124,7 +128,7 @@ utils.specshow(utils.logspec(ED[:,idx]))
 D_norm = D / np.sqrt(np.sum(D**2, axis=0, keepdims=True))
 ED_norm = ED.copy()
 ED_norm = ED_norm / np.sqrt(np.sum(ED_norm**2, axis=0, keepdims=True))
-Cor = dot(ED.T, D_norm)
+Cor = dot(ED_norm.T, D_norm)
 
 figure(1)
 utils.specshow(Cor)
@@ -147,14 +151,12 @@ for i in xrange(len(idx_all)):
 
 # <codecell>
 
-ES.shape[0]
-
-# <codecell>
-
 figure()
 subS = S[idx,:]
+utils.specshow(utils.logspec(subS))
+figure()
 mask_S = (ES != 0)
-ind = (sum(Ind, axis=1) > 0.05*ES.shape[1])
+ind = (sum(mask_S, axis=1) > 0.05*ES.shape[1])
 subS = subS[ind, :]
 utils.specshow(utils.logspec(subS))
 figure()
@@ -178,29 +180,25 @@ pass
 
 # <codecell>
 
-mrcor = zeros((100,))
+p = zeros((100,))
 for i in xrange(100):
     ridx = random.choice(S.shape[0], size=ES.shape[0], replace=False)
     rsubS = S[ridx,:]
     rsubS_z = rsubS - np.mean(rsubS, axis=1, keepdims=True)
     rcor = np.sum(ES_z * rsubS_z, axis=1) / np.sqrt(np.sum(ES_z**2, axis=1) * np.sum(rsubS_z**2, axis=1))
-    mrcor[i] = np.mean(rcor)
-print mean(mrcor), sqrt(var(mrcor))
+    p[i] = scipy.stats.wilcoxon(cor, rcor)[1]
+print mean(p), sqrt(var(p))
 
 # <codecell>
 
 figure(figsize=(8,2))
-boxplot([mrcor, cor], 0,'rs',0, widths=.5)
-xlim([-0.1, 1.05])
-xlabel('correlation')
-yticks([2,1], ['BP-NMF\n match', 'Random'])
+boxplot([rcor, cor], 0,'rs',0, widths=.5)
+#xlim([-0.1, 1.05])
+xlabel('correlation', fontsize=15)
+yticks([2,1], ['BP-NMF\n match', 'Random'], fontsize=15)
 tight_layout()
 pass
 #savefig('trans.pdf')
-
-# <codecell>
-
-scipy.stats.wilcoxon(cor, random.choice(mrcor, size=cor.shape[0], replace=False))
 
 # <codecell>
 

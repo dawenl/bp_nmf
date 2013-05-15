@@ -12,7 +12,7 @@ import scipy.optimize, scipy.special
 class Bp_NMF:
     def __init__(self, X, K=512, init_option='Rand', encoding=False, RSeed=np.random.seed(), **kwargs):
         '''
-        BN = Bp_NMF(X, K=512, init_option='Rand', RSeed=np.random.seed(), alpha=2., a0=1., b0=1., c0=1e-6, d0=1e-6)
+        BN = Bp_NMF(X, K=512, init_option='Rand', encoding=False, RSeed=np.random.seed(), alpha=2., a0=1., b0=1., c0=1e-6, d0=1e-6)
 
         Required arguments:
             X:              F-by-T nonnegative matrix (numpy.ndarray) 
@@ -28,6 +28,9 @@ class Bp_NMF:
                             'NMF' will perform a regular NMF and init from there
 
             RSeed:          the random seed to control the random behavior
+
+            encoding:       indicate if for dictionary learning or encoding
+                            if True, even dictionary will not be updated
 
             alpha:          hyperparameter for activation.
 
@@ -84,17 +87,22 @@ class Bp_NMF:
             self.Eg = self.alpha_g / self.beta_g
 
         if init_option == 'NMF':
-            import pymf
+            try:
+                import pymf
+            except ImportError:
+                print 'No pymf module, init with random...'
+                self._init('Rand', encoding)
             n_basis = min(self.K, self.T, 100) 
             print 'Init with NMF ({} basis)...'.format(n_basis)
             nmf = pymf.NMF(self.X, num_bases=n_basis, niter=100)
             nmf.initialization()
             nmf.factorize()
-            # variational parameter for D (Phi)
-            self.ED, self.ED2 = np.zeros((self.F, self.K)), np.zeros((self.F, self.K))
-            self.ED[:,:n_basis], self.ED2[:,:n_basis] = nmf.W, nmf.W**2
-            self.mu_phi, self.r_phi = np.empty((self.F, self.K)), np.empty((self.F, self.K))
-            self.mu_phi[:,:n_basis] = np.log(nmf.W)
+            if ~encoding:
+                # variational parameter for D (Phi)
+                self.ED, self.ED2 = np.zeros((self.F, self.K)), np.zeros((self.F, self.K))
+                self.ED[:,:n_basis], self.ED2[:,:n_basis] = nmf.W, nmf.W**2
+                self.mu_phi, self.r_phi = np.empty((self.F, self.K)), np.empty((self.F, self.K))
+                self.mu_phi[:,:n_basis] = np.log(nmf.W)
             # variational parameter for S (Psi)
             self.ES, self.ES2, self.ESinv = np.zeros((self.K, self.T)), np.zeros((self.K, self.T)), np.zeros((self.K, self.T))
             self.ES[:n_basis,:], self.ES2[:n_basis,:], self.ESinv[:n_basis,:] = nmf.H, nmf.H**2, 1./nmf.H
@@ -131,6 +139,7 @@ class Bp_NMF:
             self.update_z(k)
             ind_psi = self.update_psi(k, timed=timed)
             if ind_phi == -1 or ind_psi == -1:
+                # something fucked up
                 return -1
             if verbose and k % 5 == 0:
                 sys.stdout.write('.')
@@ -310,12 +319,8 @@ class Bp_NMF:
 
         good_k = self.good_k
         Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
-        #idx = (self.EZ[k,:] == 0)
-        #self.ES[k, idx], self.ES2[k, idx], self.ESinv[k, idx] = 1., 1., 1. 
         for st in xrange(2):
             ts = np.arange(st, self.T, 2)
-            #ts = np.delete(ts, np.where(self.EZ[k,ts]==0)) 
-            #if ts.shape[0] != 0:
             mu_hat, _, d = scipy.optimize.fmin_l_bfgs_b(f, self.mu_psi[k, ts], fprime=df, disp=0)
             self.mu_psi[k, ts], self.r_psi[k, ts] = mu_hat, df2(mu_hat)
             if ~np.alltrue(self.r_psi[k,ts] > 0):

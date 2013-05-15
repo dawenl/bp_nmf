@@ -31,16 +31,13 @@ N = 20
 
 # <codecell>
 
-def logexppdf(x, mu):
-    return (-np.log(mu) - x / mu)
-
 def cv_band_expansion(is_timed, ratio):
     timed = utils.gen_train_seq(is_timed, N)
     score1 = []
     score2 = []
     score3 = []
     good_ks = []
-    for i in xrange(5):
+    for i in xrange(4,5):
         idx = ones((4000,), dtype='bool')
         idx[i*800:(i+1)*800] = False
         D_test = D[:, ~idx]
@@ -51,15 +48,15 @@ def cv_band_expansion(is_timed, ratio):
         X_pred = dot(Dict[:,bnmf.good_k], (bnmf.ES * around(bnmf.EZ))[bnmf.good_k,:])
         sigma = sqrt( mean( (D_test[:F-192*ratio,:] - X_pred[:F-192*ratio,:])**2 ) )
         score1.append(np.exp(np.mean(scipy.stats.norm.logpdf(X_pred[:-192*ratio,:], loc=D_test[:-192*ratio,:], scale=sigma))))  
-        score2.append(np.exp(np.mean(logexppdf(D_test[:-192*ratio,:], X_pred[:-192*ratio,:]))))
-        score3.append(np.exp(np.mean(logexppdf(X_pred[:-192*ratio,:], D_test[:-192*ratio,:]))))
+        score2.append(np.exp(np.mean(scipy.stats.expon.logpdf(D_test[:-192*ratio,:], scale=X_pred[:-192*ratio,:]))))
+        score3.append(np.exp(np.mean(scipy.stats.expon.logpdf(X_pred[:-192*ratio,:], scale=D_test[:-192*ratio,:]))))
         good_ks.append(bnmf.good_k.shape[0])
     print good_ks
     print score1
     print score2
     print score3
     name = utils.gen_save_name(ID, is_timed, reweight, n_fft, hop_length, K)
-    sio.savemat('{}.mat'.format(name), {'goodks':good_ks, 'score1':score1, 'score2':score2, 'score3':score3})    
+    sio.savemat('{}_4.mat'.format(name), {'goodks':good_ks, 'score1':score1, 'score2':score2, 'score3':score3})    
 
 # <headingcell level=1>
 

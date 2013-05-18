@@ -37,7 +37,7 @@ def cv_band_expansion(is_timed, ratio):
     score2 = []
     score3 = []
     good_ks = []
-    for i in xrange(4,5):
+    for i in xrange(5):
         idx = ones((4000,), dtype='bool')
         idx[i*800:(i+1)*800] = False
         D_test = D[:, ~idx]
@@ -79,27 +79,4 @@ cv_band_expansion(True)
 Band expansion for i.i.d. BP-NMF
 '''
 cv_band_expansion(False, 1)
-
-# <codecell>
-
-score = [-49945.257034776252, -39861.275459696284, -100529.18378716003, -39013.04957121201, -129388.06924422563]
-mean(score)
-
-# <codecell>
-
-score = [-88306.731511612772, -74544.406821825396, -50010.272902419456, -64277.956297935161, -65453.456169710837]
-mean(score)
-
-# <codecell>
-
-d = sio.loadmat('bnmf_PinkMoon_Nscale_20N_F512_H512_K512.mat')
-score = d['score2']
-print mean(score), sqrt(var(score))
-
-# <codecell>
-
-print mean(d['goodks']), sqrt(var(d['goodks']))
-
-# <codecell>
-
 

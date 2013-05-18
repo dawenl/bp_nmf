@@ -32,7 +32,7 @@ for i in xrange(n_inst):
 
 # <codecell>
 
-n_fft = 512
+n_fft = 1024
 hop_length = 512
 n_frames = 1 + int( (num_samples - n_fft) / hop_length)
 X_envelope = np.zeros((n_inst, n_frames))
@@ -44,7 +44,7 @@ X_envelope = (X_envelope - np.mean(X_envelope, axis=1, keepdims=True)) / np.sqrt
 # <codecell>
 
 reload(utils)
-pickle_file = 'bnmf_mix_var5a22k_Nscale_20N_F512_H512_K512_GK18'
+pickle_file = 'bnmf_mix_var5a22k_Nscale_20N_F1024_H512_K512_GK46'
 bnmf = utils.load_object(pickle_file)
 x, sr = librosa.load('../data/mix_var5a22k.wav')
 num_samples = len(x)
@@ -111,8 +111,8 @@ for i in xrange(n_inst):
     else:
         window = None
         mask_interp = mask
-    X_ola = utils.stft(x, n_fft=ratio*n_fft, hann_w=window, hop_length=hop_length)
-    x_sep.append(utils.istft(X_ola * mask_interp[:,:X_ola.shape[1]], n_fft=ratio*n_fft, hop_length=hop_length, hann_w=window))
+    X_ola = librosa.stft(x, n_fft=ratio*n_fft, window=window, hop_length=hop_length)
+    x_sep.append(librosa.istft(X_ola * mask_interp[:,:X_ola.shape[1]], n_fft=ratio*n_fft, hop_length=hop_length, window=window))
 x_sep = np.array(x_sep)
 
 # <codecell>
@@ -133,7 +133,4 @@ pass
 # <codecell>
 
 sio.savemat('inst.mat', {'x_res':x_res})
-
-# <codecell>
-
 

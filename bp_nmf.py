@@ -22,24 +22,22 @@ std_col = 1.
 
 ## Data pre-processing parameters
 ID = 'demo'
-filename = '../data/{}.wav'.format(ID)
+filename = '{}.mp3'.format(ID)
 n_fft = 512
 hop_length = 256
 reweight = False
-X, std_col = utils.get_data(filename, n_fft, hop_length, reweight=reweight)
+X, std_col = utils.get_data(filename, n_fft, hop_length, reweight=reweight, sr=22050)
 
 ## Model training parameters
 init_option = 'Rand'
 alpha = 2.
 K = 512
-N = 20
-is_timed = False
-timed = utils.gen_train_seq(is_timed, N)
+N = 10
 
 # <codecell>
 
 objs = empty((N,))
-bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs)
+bnmf = utils.train(X, K, init_option, alpha, N, objs=objs)
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 plot(objs[1:])
@@ -87,13 +85,11 @@ for i in xrange(0,2*num,2):
     plot((tmpEZ * tmpES)[i/2,:])
 tight_layout()
 
-#sio.savemat('fuck.mat', {'ED', 
-
 # <codecell>
 
 ## Save!!
 reload(utils)
-name = utils.gen_save_name(ID, is_timed, reweight, n_fft, hop_length, K, good_k=bnmf.good_k.shape[0])
+name = utils.gen_save_name(ID, reweight, n_fft, hop_length, K, good_k=bnmf.good_k.shape[0])
 utils.save_object(bnmf, name)
 
 # <headingcell level=1>
@@ -130,7 +126,4 @@ for i in xrange(good_k.shape[0]):
     audiolab.play(xl_bp[i,:])
     time.sleep(1)
     #audiolab.play(xl_nmf[i,:])
-
-# <codecell>
-
 

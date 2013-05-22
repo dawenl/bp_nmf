@@ -6,9 +6,7 @@ CREATED: 2013-05-02 05:14:35 by Dawen Liang <dl2771@columbia.edu>
 
 import functools, pickle, time
 import numpy as np
-import numpy.fft as fft
 import matplotlib.pyplot as plt
-import scipy.signal
 
 import bp_vbayes
 import librosa
@@ -51,7 +49,7 @@ def gsubplot(args=(), cmap=plt.cm.gray_r):
     plt.tight_layout()
     return
 
-def get_data(filename, n_fft, hop_length, sr=None, reweight=False, amin=1e-10, dbdown=80):
+def get_data(filename, n_fft, hop_length, sr=22050, reweight=False, amin=1e-10, dbdown=80):
     x, _ = librosa.load(filename, sr=sr)
     X = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
     specshow(logspec(X))

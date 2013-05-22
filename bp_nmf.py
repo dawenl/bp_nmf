@@ -26,7 +26,7 @@ filename = '../data/{}.wav'.format(ID)
 n_fft = 512
 hop_length = 256
 reweight = False
-X, std_col = utils.get_data(filename, n_fft, hop_length, reweight=reweight)
+X, std_col = utils.get_data(filename, n_fft, hop_length, sr=22050, reweight=reweight)
 
 ## Model training parameters
 init_option = 'Rand'
@@ -39,7 +39,7 @@ timed = utils.gen_train_seq(is_timed, N)
 # <codecell>
 
 objs = empty((N,))
-bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs)
+bnmf = utils.train(X, K, init_option, alpha, N, timed, objs=objs, RSeed=random.seed(357))
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 plot(objs[1:])
@@ -80,14 +80,13 @@ utils.gsubplot(args=(dot(tmpED.T, tmpED),), cmap=cm.hot_r)
 tmpEZ = around(bnmf.EZ[good_k[idx],:])
 figure(1)
 num = len(good_k)
+#num = 7
 for i in xrange(0,2*num,2):
     subplot(num, 2, i+1)
     plot(10*log10(tmpED[:, i/2]))
     subplot(num, 2, i+2)
     plot((tmpEZ * tmpES)[i/2,:])
 tight_layout()
-
-#sio.savemat('fuck.mat', {'ED', 
 
 # <codecell>
 

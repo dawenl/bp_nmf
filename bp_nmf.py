@@ -22,7 +22,7 @@ std_col = 1.
 
 ## Data pre-processing parameters
 ID = 'demo'
-filename = '{}.mp3'.format(ID)
+filename = '../data/{}.wav'.format(ID)
 n_fft = 512
 hop_length = 256
 reweight = False
@@ -32,12 +32,12 @@ X, std_col = utils.get_data(filename, n_fft, hop_length, sr=22050, reweight=rewe
 init_option = 'Rand'
 alpha = 2.
 K = 512
-N = 10
+N = 20
 
 # <codecell>
 
 objs = empty((N,))
-bnmf = utils.train(X, K, init_option, alpha, N, objs=objs)
+bnmf = utils.train(X, K, init_option, alpha, N, objs=objs, RSeed=random.seed(357), fmin='LBFGS')
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 plot(objs[1:])
@@ -78,7 +78,6 @@ utils.gsubplot(args=(dot(tmpED.T, tmpED),), cmap=cm.hot_r)
 tmpEZ = around(bnmf.EZ[good_k[idx],:])
 figure(1)
 num = len(good_k)
-#num = 7
 for i in xrange(0,2*num,2):
     subplot(num, 2, i+1)
     plot(10*log10(tmpED[:, i/2]))
@@ -127,4 +126,7 @@ for i in xrange(good_k.shape[0]):
     audiolab.play(xl_bp[i,:])
     time.sleep(1)
     #audiolab.play(xl_nmf[i,:])
+
+# <codecell>
+
 

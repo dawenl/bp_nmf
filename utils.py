@@ -40,7 +40,7 @@ def gsubplot(args=(), cmap=plt.cm.gray_r):
     nargs = len(args)
     for i in xrange(nargs):
         plt.subplot(nargs, 1, i + 1)
-        if type(args[i]) == dict:
+        if type(args[i]) is dict:
             specshow(args[i]['D'], cmap=cmap)
             plt.title(args[i]['T'])
         else:
@@ -62,18 +62,9 @@ def get_data(filename, n_fft, hop_length, sr=22050, reweight=False, amin=1e-10, 
     X = np.maximum(X, 10**(-dbdown/10)*X.max())
     return (X, std_col)
 
-def gen_train_seq(is_timed, N):
-    if is_timed:
-        timed = np.ones((N,), dtype='bool')
-        timed[0] = False
-    else:
-        timed = np.zeros((N,), dtype='bool')
-    return timed
-
-def gen_save_name(id, is_timed, reweight, n_fft, hop_length, K, good_k=None):
+def gen_save_name(id, reweight, n_fft, hop_length, K, good_k=None):
     str_scaled = 'Scale' if reweight else 'Nscale'
-    str_timed = '1N19T' if is_timed else '20N'
-    name = 'bnmf_{}_{}_{}_F{}_H{}_K{}'.format(id, str_scaled, str_timed, n_fft, hop_length, K)
+    name = 'bnmf_{}_{}_F{}_H{}_K{}'.format(id, str_scaled, n_fft, hop_length, K)
     if good_k is not None:
         name += '_GK{}'.format(good_k)
     return name
@@ -88,17 +79,18 @@ def load_object(filename):
         obj = pickle.load(output)
     return obj 
 
-def train(X, K, init_option, alpha, N, timed, objs=None, RSeed=np.random.seed(), bnmf=None):
+def train(X, K, init_option, alpha, N, objs=None, RSeed=np.random.seed(),
+        bnmf=None, fmin='LBFGS'):
     if bnmf is None:
         bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, RSeed=RSeed, alpha=alpha)
     for n in xrange(N):
         start_t = time.time()
-        ind = bnmf.update(timed=timed[n])
-        if ind == -1:
+        ind = bnmf.update(fmin=fmin)
+        if not ind :
             if n <= 1:
                 # the initialization can be bad and the first/second iteration will suck, so restart
                 print '***Bad initial values, restart***'
-                return train(X, K, init_option, alpha, N, timed, objs=objs, RSeed=RSeed)
+                return train(X, K, init_option, alpha, N, objs=objs, RSeed=RSeed, fmin=fmin)
             else:
                 # this should rarely happen
                 print '***Oops***'
@@ -109,14 +101,14 @@ def train(X, K, init_option, alpha, N, timed, objs=None, RSeed=np.random.seed(),
         print 'Dictionary Learning: Iteration: {}, good K: {}, time: {:.2f}, obj: {}'.format(n, bnmf.good_k.shape[0], t, bnmf.obj)
     return bnmf
 
-def encode(bnmf, X, K, ED, ED2, init_option, alpha, N, timed, RSeed=np.random.seed()):
+def encode(bnmf, X, K, ED, ED2, init_option, alpha, N, RSeed=np.random.seed(), fmin='LBFGS'):
     bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, encoding=True, RSeed=RSeed, alpha=alpha)
     bnmf.ED, bnmf.ED2 = ED, ED2
     for n in xrange(N):
         start_t = time.time()
-        ind = bnmf.encode(timed=timed[n])
-        if ind == -1:
-            return encode(bnmf, X, K, ED, ED2, init_option, alpha, N, timed)
+        ind = bnmf.encode(fmin=fmin)
+        if not ind:
+            return encode(bnmf, X, K, ED, ED2, init_option, alpha, N, fmin=fmin)
         t = time.time() - start_t
         print 'Encoding: Iteration: {}, good K: {}, time: {:.2f}, obj: {}'.format(n, bnmf.good_k.shape[0], t, bnmf.obj)
     return bnmf

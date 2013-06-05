@@ -80,17 +80,17 @@ def load_object(filename):
     return obj 
 
 def train(X, K, init_option, alpha, N, objs=None, RSeed=np.random.seed(),
-        bnmf=None, fmin='LBFGS'):
+        bnmf=None, multi_D=False, multi_S=True, disp=0):
     if bnmf is None:
         bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, RSeed=RSeed, alpha=alpha)
     for n in xrange(N):
         start_t = time.time()
-        ind = bnmf.update(fmin=fmin)
+        ind = bnmf.update(multi_D=multi_D, multi_S=multi_S, disp=disp)
         if not ind :
             if n <= 1:
                 # the initialization can be bad and the first/second iteration will suck, so restart
                 print '***Bad initial values, restart***'
-                return train(X, K, init_option, alpha, N, objs=objs, RSeed=RSeed, fmin=fmin)
+                return train(X, K, init_option, alpha, N, objs=objs, RSeed=RSeed, multi_D=multi_D, multi_S=multi_S, disp=disp)
             else:
                 # this should rarely happen
                 print '***Oops***'

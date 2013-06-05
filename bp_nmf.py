@@ -20,6 +20,7 @@ std_col = 1.
 
 # <codecell>
 
+reload(bp_vbayes)
 ## Data pre-processing parameters
 ID = 'demo'
 filename = '../data/{}.wav'.format(ID)
@@ -32,12 +33,13 @@ X, std_col = utils.get_data(filename, n_fft, hop_length, sr=22050, reweight=rewe
 init_option = 'Rand'
 alpha = 2.
 K = 512
-N = 20
+N = 10
 
 # <codecell>
 
+reload(utils)
 objs = empty((N,))
-bnmf = utils.train(X, K, init_option, alpha, N, objs=objs, RSeed=random.seed(357), fmin='LBFGS')
+bnmf = utils.train(X, K, init_option, alpha, N, objs=objs, RSeed=random.seed(357), multi_D=False, multi_S=True, disp=1)
 
 print 'sigma_error = {}'.format(sqrt(1./bnmf.Eg))
 plot(objs[1:])

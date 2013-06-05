@@ -130,7 +130,7 @@ class Bp_NMF:
         '''
         return (np.exp(mu + 1./(2*r)), np.exp(2*mu + 2./r), np.exp(-mu + 1./(2*r)))
 
-    def update(self, fmin='LBFGS', verbose=True):
+    def update(self, multi_D=False, multi_S=True, verbose=True, disp=0):
         '''
         Perform dictionary-learning update for one iteration, truncate rarely-used dictionary elements and update the lower bound.  
 
@@ -139,9 +139,9 @@ class Bp_NMF:
         print 'Updating DZS...'
         good_k = self.good_k
         for k in good_k:
-            ind_phi = self.update_phi(k, fmin)
+            ind_phi = self.update_phi(k, multi_D, disp)
             self.update_z(k)
-            ind_psi = self.update_psi(k, fmin)
+            ind_psi = self.update_psi(k, multi_S, disp)
             if not ind_phi or not ind_psi:
                 # something fucked up
                 return False
@@ -157,12 +157,12 @@ class Bp_NMF:
         self._lower_bound()
         return True 
 
-    def encode(self, fmin='LBFGS', verbose=True):
+    def encode(self, multi=True, verbose=True):
         print 'Updating ZS...'
         good_k = self.good_k
         for k in good_k:
             self.update_z(k)
-            ind_psi = self.update_psi(k, fmin)
+            ind_psi = self.update_psi(k, multi)
             if not ind_psi:
                 return False
             if verbose and not k % 5:
@@ -175,46 +175,46 @@ class Bp_NMF:
         self._lower_bound()
         return True 
         
-    def update_phi(self, k, fmin):
-        def f_stub(phi):
-            lcoef = self.Eg * np.sum(np.outer(np.exp(phi), self.ES[k,:]*self.EZ[k,:]) * Eres, axis=1)
+    def update_phi(self, k, multi, disp):
+        def _f_stub(phi, f):
+            phi = np.asarray(phi).ravel()
+            lcoef = self.Eg * np.sum(np.outer(np.exp(phi), self.ES[k,:]*self.EZ[k,:]) * Eres[f,:], axis=1)
             qcoef = -1./2 * self.Eg * np.sum(np.outer(np.exp(2*phi), self.ES2[k,:]*self.EZ[k,:]), axis=1)
             return (lcoef, qcoef)
 
-        def f(phi):
-            lcoef, qcoef = f_stub(phi)
+        def _f(phi, f=np.arange(self.F)):
+            lcoef, qcoef = _f_stub(phi, f)
             const = -1./2*phi**2
             return -np.sum(lcoef + qcoef + const)
 
-        def df(phi):
-            lcoef, qcoef = f_stub(phi)
+        def _df(phi, f=np.arange(self.F)):
+            lcoef, qcoef = _f_stub(phi, f)
             const = -phi
             return -(lcoef + 2*qcoef + const)
 
-        def df2(phi):
-            lcoef, qcoef = f_stub(phi)
+        def _df2(phi, f=np.arange(self.F)):
+            lcoef, qcoef = _f_stub(phi, f)
             const = -1
             return -(lcoef + 4*qcoef + const)
 
         good_k = self.good_k
         Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
         phi0 = self.mu_phi[:,k]
-        if fmin == 'LBFGS':
-            mu_hat, _, d = scipy.optimize.fmin_l_bfgs_b(f, phi0, fprime=df, disp=0)
-        elif fmin == 'NCG':
-            def _fhess(phi):
-                return np.diag(df2(phi))
-            mu_hat = scipy.optimize.fmin_ncg(f, phi0, df, fhess=_fhess)
-        else:
-            raise ValueError('fmin can only be either LBFGS or NCG')
-        self.mu_phi[:,k], self.r_phi[:,k] = mu_hat, df2(mu_hat)
-        if np.any(self.r_phi[:,k] <= 0):
-            if fmin == 'LBFGS':
+        if multi:
+            mu_hat, _, d = scipy.optimize.fmin_l_bfgs_b(_f, phi0, fprime=_df, disp=0)
+            self.mu_phi[:,k], self.r_phi[:,k] = mu_hat, _df2(mu_hat)
+            if disp and np.any(self.r_phi[:,k] <= 0):
                 if d['warnflag'] == 2:
-                    print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(mu_hat))
+                    print 'D[:, {}]: {}, f={}'.format(k, d['task'], _f(mu_hat))
                 else:
-                    print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(mu_hat))
-            return False 
+                    print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], _f(mu_hat))
+                return False 
+        else:
+            mu_hat = np.zeros((self.F,))
+            for f in xrange(self.F):
+                mu_hat[f], _, _ = scipy.optimize.fmin_l_bfgs_b(_f, phi0[f], fprime=_df, args=(f,), disp=0)
+            self.mu_phi[:,k], self.r_phi[:,k] = mu_hat, _df2(mu_hat)
+            assert(np.any(self.r_phi[:,k] > 0))
         self.ED[:,k], self.ED2[:,k], _ = self._exp(self.mu_phi[:,k], self.r_phi[:,k])
         return True 
   
@@ -227,45 +227,45 @@ class Bp_NMF:
         self.p_z[k,:] = 1./(1 + np.exp(p0 - p1))
         self.EZ[k,:] = self.p_z[k,:]
 
-    def update_psi(self, k, fmin):
-        def f_stub(psi):
-            lcoef = self.Eg * np.sum(np.outer(self.ED[:,k], np.exp(psi)*self.EZ[k,:]) * Eres, axis=0)
-            qcoef = -1./2 * self.Eg * np.sum(np.outer(self.ED2[:,k], np.exp(2*psi)*self.EZ[k,:]), axis=0)
+    def update_psi(self, k, multi, disp):
+        def f_stub(psi, t):
+            psi = np.asarray(psi).ravel()
+            lcoef = self.Eg * np.sum(np.outer(self.ED[:,k], np.exp(psi)*self.EZ[k,t]) * Eres[:,t], axis=0)
+            qcoef = -1./2 * self.Eg * np.sum(np.outer(self.ED2[:,k], np.exp(2*psi)*self.EZ[k,t]), axis=0)
             return (lcoef, qcoef)
 
-        def f(psi):
-            lcoef, qcoef = f_stub(psi)
+        def f(psi, t=np.arange(self.T)):
+            lcoef, qcoef = f_stub(psi, t)
             const = self.alpha * psi - self.alpha * np.exp(psi)
             return -np.sum(lcoef + qcoef + const)
-        def df(psi):
-            lcoef, qcoef = f_stub(psi)
+        def df(psi, t=np.arange(self.T)):
+            lcoef, qcoef = f_stub(psi, t)
             const = self.alpha - self.alpha * np.exp(psi)
             return -(lcoef + 2*qcoef + const)
             
-        def df2(psi):
-            lcoef, qcoef = f_stub(psi)
+        def df2(psi, t=np.arange(self.T)):
+            lcoef, qcoef = f_stub(psi, t)
             const = -self.alpha * np.exp(psi)
             return -(lcoef + 4*qcoef + const)
 
         good_k = self.good_k
         Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
         psi0 = self.mu_psi[k,:]
-        if fmin == 'LBFGS':
+        if multi:
             mu_hat, _, d = scipy.optimize.fmin_l_bfgs_b(f, psi0, fprime=df, disp=0)
-        elif fmin == 'NCG':
-            def _fhess(psi):
-                return np.diag(df2(psi))
-            mu_hat = scipy.optimize.fmin_ncg(f, psi0, df, fhess=_fhess)
-        else:
-            raise ValueError('fmind can only be either LBFGS or NCG')
-        self.mu_psi[k,:], self.r_psi[k,:] = mu_hat, df2(mu_hat)
-        if np.any(self.r_psi[k, :] <= 0):
-            if fmin == 'LBFGS':
+            self.mu_psi[k,:], self.r_psi[k,:] = mu_hat, df2(mu_hat)
+            if np.any(self.r_psi[k, :] <= 0):
                 if d['warnflag'] == 2:
                     print 'S[{}, :]: {}'.format(k, d['task'])
                 else:
                     print 'S[{}, :]: {}'.format(k, d['warnflag'])
-            return False 
+                return False 
+        else:
+            mu_hat = np.zeros((self.T,))
+            for t in xrange(self.T):
+                mu_hat[t], _, _ = scipy.optimize.fmin_l_bfgs_b(f, psi0[t], fprime=df, args=(t,), disp=0)
+            self.mu_psi[k,:], self.r_psi[k,:] = mu_hat, df2(mu_hat)
+            assert(np.any(self.r_psi[k,:] > 0))
         self.ES[k,:], self.ES2[k,:], self.ESinv[k,:] = self._exp(self.mu_psi[k,:], self.r_psi[k,:])
         return True 
 

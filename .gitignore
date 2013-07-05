@@ -1,6 +1,7 @@
 *.py[cod]
 *.swp
 *.mat
+*.pdf
 *.eps
 *.ipynb
 

@@ -6,8 +6,6 @@
 \usepackage{bm}
 \usepackage{enumerate}
 \geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
-%\geometry{landscape}                % Activate for for rotated page geometry
-%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
 \usepackage{amssymb}
 \usepackage{epstopdf}
 \newcommand{\tabincell}[2]{\begin{tabular}{@{}#1@{}}#2\end{tabular}}  
@@ -34,7 +32,7 @@ The model is specified as follows:
 \begin{align*}
 \boldsymbol{x}_t = &~ \mathbf{D}(\boldsymbol{s}_t \odot \boldsymbol{z}_t) + \epsilon_t\\
 \log (\boldsymbol{d}_k) \sim &~ \mathcal{N}(0, \mathbf{I}_F)\\ 
- \boldsymbol{s}_t \sim &~ \Gamma(\alpha, \alpha / \boldsymbol{s}_{t-1})\\
+ \boldsymbol{s}_t \sim &~ \Gamma(\alpha, \beta)\\
 \bm{z}_{k} \sim &~ \textrm{Bernoulli}(\pi_k)\\
 \pi_k \sim &~ \textrm{Beta}(\frac{a_0}{K}, \frac{b_0 (K-1)}{K})\\
 \bm{\epsilon}_t \sim &~ \mathcal{N}(0, \gamma_\epsilon^{-1} \mathbf{I}_F)\\
@@ -46,24 +44,24 @@ Capital bold letters represent matrices (e.g. $\mathbf{X}, \mathbf{D}$) while lo
 
 
 \section{Laplace Approximation Variational Inference}
-Since the method used requires the continuous variables being real-valued, thus we re-parametrize the model parameters $\Theta = \{\mathbf{D}, \mathbf{S}, \mathbf{Z}, \bm{\pi}, \gamma_\epsilon\}$ as $\{\mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \bm{\pi}, \gamma_\epsilon\}$, where $\mathbf{\Phi} \in \mathbb{R}^{F\times K}$ with $\Phi_{fk} = \log(D_{fk})$ and $\mathbf{\Psi} \in \mathbb{R}^{K \times T}$ with $\Psi_{kt} = \log(S_{kt})$.
+Laplace approximation variational inference assumes that the nonconjugate continuous variables are unconstrained, thus we reparametrize the model parameters $\Theta = \{\mathbf{D}, \mathbf{S}, \mathbf{Z}, \bm{\pi}, \gamma_\epsilon\}$ as $\{\mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \bm{\pi}, \gamma_\epsilon\}$, where $\mathbf{\Phi} \in \mathbb{R}^{F\times K}$ with $\Phi_{fk} = \log(D_{fk})$ and $\mathbf{\Psi} \in \mathbb{R}^{K \times T}$ with $\Psi_{kt} = \log(S_{kt})$.
 The variational distribution: 
 \[
-q(\Theta) = \prod_{k=1}^K \prod_{f=1}^F  \prod_{t=1}^T q(\Phi_{fk}) q(\Psi_{kt}) q(Z_{kt}) q(\pi_k) q(\gamma_\epsilon)
+q(\Theta) = q(\gamma_\epsilon)\prod_{k=1}^K q(\pi_k) \biggl(\prod_{f=1}^F q(\Phi_{fk}) \biggl) \prod_{t=1}^T q(\Psi_{kt}) q(Z_{kt}) 
 \]
 where the variational distributions are specified as follows:
 \begin{align*}
-q(\Phi_{fk}) &\sim \mathcal{N}(\mu_{fk}^{(\Phi)}, 1/\gamma_{fk}^{(\Phi)})\\
-q(\Psi_{kt}) &\sim \mathcal{N}(\mu_{kt}^{(\Psi)}, 1/\gamma_{kt}^{(\Psi)})\\
-q(Z_{kt}) &\sim \textrm{Bernoulli}(p_{kt}^{(z)})\\
-q(\pi_{k}) &\sim \textrm{Beta}(\alpha_k^{(\pi)}, \beta_k^{(\pi)})\\
-q(\gamma_\epsilon) &\sim \Gamma(\alpha^{(\epsilon)}, \beta^{(\epsilon)})
+q(\Phi_{fk}) &= \mathcal{N}(\mu_{fk}^{(\Phi)}, 1/\gamma_{fk}^{(\Phi)})\\
+q(\Psi_{kt}) &= \mathcal{N}(\mu_{kt}^{(\Psi)}, 1/\gamma_{kt}^{(\Psi)})\\
+q(Z_{kt}) &= \textrm{Bernoulli}(p_{kt}^{(z)})\\
+q(\pi_{k}) &= \textrm{Beta}(\alpha_k^{(\pi)}, \beta_k^{(\pi)})\\
+q(\gamma_\epsilon) &= \Gamma(\alpha^{(\epsilon)}, \beta^{(\epsilon)})
 \end{align*}
 
-Thus the evidence lower bound (ELBO):
+Thus the Evidence Lower BOund (ELBO):
 \begin{align*}
 \log(P(\mathbf{X})) &\geq \mathbb{E}_q [\log P(\mathbf{X}, \Theta)] - \mathbb{E}_q [\log q(\Theta)]\\
-&= \mathbb{E}_q [\log P(\mathbf{X} | \mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \gamma_\epsilon)] + \mathbb{E}_q [\log P(\mathbf{\Phi})] + \sum_{t=1}^T \mathbb{E}_q [\log P(\bm{\psi}_t | \bm{\psi}_{t-1})]\\
+&= \mathbb{E}_q [\log P(\mathbf{X} | \mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \gamma_\epsilon)] + \mathbb{E}_q [\log P(\mathbf{\Phi})] + \mathbb{E}_q [\log P(\mathbf{\Psi})]\\
  &+ \mathbb{E}_q[\log P(\mathbf{Z} | \bm{\pi})] + \mathbb{E}_q[\log P(\bm{\pi})] + \mathbb{E}_q[\log P(\gamma_\epsilon)] + \mathbb{H}_q [q(\Theta)] 
 \end{align*}
 
@@ -118,24 +116,22 @@ f(\Phi_{fk}) \propto & \langle \gamma_{\epsilon} \rangle \exp(\Phi_{fk}) \sum_{t
 \langle \hat{X}_{ft}^{-k} \rangle \\
 & -\frac{1}{2}  \langle \gamma_{\epsilon} \rangle \exp(2\Phi_{fk}) \sum_{t=1}^T \langle \exp(2\Psi_{kt}) \rangle \langle Z_{kt} \rangle - \frac{1}{2}\Phi_{fk}^2
 \end{align*}
-where $\hat{X}_{ft}^{-k}  = X_{ft} - \sum_{j\neq k}  \exp(\Phi_{fj}) \exp(\Psi_{jt}) Z_{jt}$. Note except the last term, all the terms have the form of $\alpha\exp(\beta \Phi_{fk})$, which means the first and second order derivative will have the exact same form with constant scalar. For variational update,
+where $\hat{X}_{ft}^{-k}  = X_{ft} - \sum_{j\neq k}  \exp(\Phi_{fj}) \exp(\Psi_{jt}) Z_{jt}$. Note except the last term, all the terms have the form of $a\exp(b \Phi_{fk})$, which means the first and second order derivative will have the exact same form with constant scalar. For variational update,
 \begin{align*}
 \mu_{fk}^{(\Phi)} &\leftarrow \hat{\Phi}_{fk}, \text{ where }  \frac{\partial f}{\partial \Phi_{fk}} (\hat{\Phi}_{fk}) = 0 \\
 \gamma_{fk}^{(\Phi)} &\leftarrow -\frac{\partial f^2}{\partial^2 \Phi_{fk}} (\hat{\Phi}_{fk})
 \end{align*}
 
-
 \subsection{Update $\mathbf{\Psi}$}
 \begin{align*}
 q(\Psi_{kt}) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-\Psi_{kt}}\}\\
-&\propto \exp\{\langle \log P(\bm{x}_t | \mathbf{\Phi}, \bm{\psi}_t, \mathbf{z}_t, \gamma_\epsilon)\rangle + \langle \log P(\Psi_{kt} | \Psi_{k(t-1)}) \rangle + \langle \log P(\Psi_{k(t+1)} | \Psi_{kt}) \rangle\}\\
+&\propto \exp\{\langle \log P(\bm{x}_t | \mathbf{\Phi}, \bm{\psi}_t, \mathbf{z}_t, \gamma_\epsilon)\rangle + \langle \log P(\Psi_{kt}) \rangle\}\\
 &= \exp\{f(\Psi_{kt})\}
 \end{align*}
 
 Since $S_{kt}$ is gamma distributed, $\Psi_{kt} = \log S_{kt}$ is log-gamma distributed:
 \begin{align*}
-P(\Psi_{kt} | \Psi_{k(t-1)} ) &= \frac{\alpha^\alpha}{\exp(\alpha \Psi_{k(t-1)}) \Gamma(\alpha)} \exp(\alpha \Psi_{kt} - \frac{\alpha}{\exp(\Psi_{k(t-1)})} \exp(\Psi_{kt}))\\
-&= h(\Psi_{kt}) \exp[\eta(\alpha, \Psi_{k(t-1)})^T \cdot T(\Psi_{kt}) - A(\eta)]
+P(\Psi_{kt}) &= \frac{\beta^\alpha}{\Gamma(\alpha)} \exp(\alpha \Psi_{kt} - \beta \exp(\Psi_{kt}))
 \end{align*}
 %where 
 %\begin{align*}
@@ -152,11 +148,7 @@ P(\Psi_{kt} | \Psi_{k(t-1)} ) &= \frac{\alpha^\alpha}{\exp(\alpha \Psi_{k(t-1)})
 
 Thus, 
 \[
-\langle \log P(\Psi_{kt} | \Psi_{k(t-1)}) \rangle \propto \alpha \Psi_{kt} - \alpha \langle \exp(-\Psi_{k(t-1)}) \rangle \exp(\Psi_{kt})
-\]
-Similarly,
-\[
-\langle \log P(\Psi_{k(t+1)} | \Psi_{kt}) \rangle \propto -\alpha \langle \exp(\Psi_{k(t+1)}) \rangle \exp(-\Psi_{kt}) - \alpha \Psi_{kt}
+\langle \log P(\Psi_{kt}) \rangle \propto \alpha \Psi_{kt} - \beta \exp(\Psi_{kt})
 \]
 
 As for $\langle \log P(\bm{x}_t | \mathbf{\Phi}, \bm{\psi}_t, \mathbf{z}_t, \gamma_\epsilon)\rangle$, this can be obtained in a similar fashion as in Section \ref{sec:phi}. Therefore, the update for $\Psi_{kt}$:
@@ -214,7 +206,7 @@ q(\gamma_\epsilon) &\propto \exp\{\langle\log P(\mathbf{X}, \Theta)\rangle_{-\ga
 This part of the model is also conjugate, between the precision of the normal distribution and gamma distribution. Therefore, the closed form update:
 \begin{align*}
 \alpha^{(\epsilon)} &\leftarrow  c_0 + \frac{1}{2} FT\\
-\beta^{(\epsilon)} &\leftarrow d_0 + \frac{1}{2}\sum_{t=1}^T \parallel \bm{x}_t - \langle \exp(\mathbf{\Phi}) ( \exp(\bm{\psi}_t) \odot  \bm{z}_t ) \rangle \parallel_2^2
+\beta^{(\epsilon)} &\leftarrow d_0 + \frac{1}{2}\sum_{t=1}^T \parallel \bm{x}_t - \langle \mathbf{D} ( \bm{s}_t \odot  \bm{z}_t ) \rangle \parallel_2^2
 \end{align*}
 
 

@@ -4,6 +4,9 @@
 *.pdf
 *.eps
 *.ipynb
+*.log
+*.aux
+*.gz
 
 # C extensions
 *.so

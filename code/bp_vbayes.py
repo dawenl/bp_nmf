@@ -76,15 +76,13 @@ class BP_NMF:
 
     def _init(self, smoothness):
         # variational parameters for D (Phi)
-        self.mu_phi = np.random.randn(self.F, self.K)
-        self.r_phi = np.random.gamma(2, size=(self.F, self.K))
-        self.sigma_phi = np.sqrt(1./self.r_phi)
-        self.ED, self.ED2, _ = _exp(self.mu_phi, self.r_phi)
+        self.mu_phi, self.r_phi = np.random.randn(self.F, self.K), np.random.gamma(smoothness, 1./smoothness, size=(self.F, self.K))
+        self.sigma_phi = 1./self.r_phi
+        self.ED, self.ED2 = comp_expect(self.mu_phi, self.r_phi)
         # variational parameters for S (Psi)
-        self.mu_psi = np.random.randn(self.K, self.T)
-        self.r_psi = np.random.gamma(2, size=(self.K, self.T))
-        self.sigma_psi = np.sqrt(1./self.r_psi)
-        self.ES, self.ES2, self.ESinv = _exp(self.mu_psi, self.r_psi)
+        self.mu_psi, self.r_psi = np.random.randn(self.K, self.T), np.random.gamma(smoothness, 1./smoothness, size=(self.K, self.T))
+        self.sigma_psi = 1./self.r_psi
+        self.ES, self.ES2 = comp_expect(self.mu_psi, self.r_psi)
         # variational parameters for Z
         self.p_z = np.random.rand(self.K, self.T)
         self.EZ = self.p_z
@@ -122,20 +120,55 @@ class BP_NMF:
         return True 
 
     def update_phi(self, k, disp):
-        def f(phi):
-            pass
+        def f(theta):
+            mu, sigma = theta[:self.F], np.exp(theta[-self.F:]) 
+            ED, ED2 = comp_expect(mu, 1./sigma)
 
-        def df(phi):
-            pass
-        pass
+        def df(theta):
+            mu, sigma = theta[:self.F], np.exp(theta[-self.F:])
+            ED, ED2 = comp_expect(mu, 1./sigma)
+        
+        good_k = self.good_k
+        Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
+        theta0 = np.hstack((self.mu_phi[:,k], np.log(self.sigma_phi[:,k])))
+        theta_hat, _, d = optimize.fmin_l_bfgs_b(f, theta0, fprime=df, disp=0)
+        self.mu_phi[:,k], self.sigma_phi[:,k] = theta_hat[:self.F], np.exp(theta_hat[-self.F:])
+        self.r_phi[:,k] = 1./self.sigma_phi[:,k]
+
+        if disp and d['warnflag']:
+            if d['warnflag'] == 2:
+                print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(theta_hat))
+            else:
+                print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(theta_hat))
+        self.ED[:,k], self.ED2[:,k], _ = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
+        return True 
+
 
     def update_psi(self, k, disp):
-        def f(psi):
-            pass
-        def df(psi):
-            pass
-        pass
+        def f(theta):
+            mu, sigma = theta[:self.T], np.exp(theta[-self.T:]) 
+            ES, ES2 = comp_expect(mu, 1./sigma)
+            
+        def df(theta):
+            mu, sigma = theta[:self.T], np.exp(theta[-self.T:]) 
+            ES, ES2 = comp_expect(mu, 1./sigma)
     
+        good_k = self.good_k
+        Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
+        
+        theta0 = np.hstack((self.mu_psi[k,:], np.log(self.sigma_psi[k,:])))
+        theta_hat, _, d = optimize.fmin_l_bfgs_b(f, theta0, fprime=df, disp=0)
+        self.mu_psi[k,:], self.sigma_psi[k,:] = theta_hat[:self.T], np.exp(theta_hat[-self.T:])
+        self.r_psi[k,:] = 1./self.sigma_psi[k,:]
+
+        if disp and d['warnflag']:
+            if d['warnflag'] == 2:
+                print 'S[{}, :]: {}'.format(k, d['task'])
+            else:
+                print 'S[{}, :]: {}'.format(k, d['warnflag'])
+        self.ES[k,:], self.ES2[k,:] = comp_expect(self.mu_psi[k,:], self.r_psi[k,:])
+        return True 
+
     def update_z(self, k):
         good_k = self.good_k
         Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
@@ -244,13 +277,13 @@ class LVI_BP_NMF(BP_NMF):
         phi0 = self.mu_phi[:,k]
         mu_hat, _, d = optimize.fmin_l_bfgs_b(f, phi0, fprime=df, disp=0)
         self.mu_phi[:,k], self.r_phi[:,k] = mu_hat, df2(mu_hat)
-        if disp and np.any(self.r_phi[:,k] <= 0):
+        if np.any(self.r_phi[:,k] <= 0):
             if d['warnflag'] == 2:
                 print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(mu_hat))
             else:
                 print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(mu_hat))
             return False 
-        self.ED[:,k], self.ED2[:,k], _ = _exp(self.mu_phi[:,k], self.r_phi[:,k])
+        self.ED[:,k], self.ED2[:,k], _ = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
         return True 
   
     def update_psi(self, k, disp):
@@ -285,13 +318,21 @@ class LVI_BP_NMF(BP_NMF):
             else:
                 print 'S[{}, :]: {}'.format(k, d['warnflag'])
             return False 
-        self.ES[k,:], self.ES2[k,:], self.ESinv[k,:] = _exp(self.mu_psi[k,:], self.r_psi[k,:])
+        self.ES[k,:], self.ES2[k,:] = comp_expect(self.mu_psi[k,:], self.r_psi[k,:])
         return True 
     
-def _exp(mu, r):
+def comp_expect(mu, r):
     '''
-    Given mean and precision of a Gaussian r.v. theta ~ N(mu, 1/r), compute E[exp(theta)], E[exp(2*theta)], and E[exp(-theta)]
+    Given mean and precision of a Gaussian r.v. theta ~ N(mu, 1/r), compute E[exp(theta)] and E[exp(2*theta)]
     '''
-    return (np.exp(mu + 1./(2*r)), np.exp(2*mu + 2./r), np.exp(-mu + 1./(2*r)))
+    return (np.exp(mu + 1./(2*r)), np.exp(2*mu + 2./r))
+
+def approx_grad(f, x, delta=1e-8, args=()):
+    x = np.asarray(x).ravel()
+    grad = np.zeros_like(x)
+    diff = delta * np.eye(x.size)
+    for i in xrange(x.size):
+        grad[i] = (f(x + diff[i], *args) - f(x - diff[i], *args)) / (2*delta)
+    return grad
 
 

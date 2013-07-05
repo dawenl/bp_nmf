@@ -1,19 +1,28 @@
 #!/usr/bin/env python
-'''Bayesian nonparametric NMF with Laplace Approximation Variational Inference
+"""Beta-Process Sparse NMF
 
-2013-04-24 18:14:24 by Dawen Liang <dl2771@columbia.edu>    
+Two different approaches included for variational inference:
+    BP_NMF --> Directly optimizing the ELBO for nonconjugate variables
+    LVI_BP_NMF --> Laplace approximation variational inference
 
-'''
+The algorithm is described in:
+    'Beta Process Sparse Nonnegative Matrix Factorization for Music' by  
+    Dawen Liang, Matthew D. Hoffman, and Daniel P. W. Ellis
+    in ISMIR 2013
+
+CREATED: 2013-04-24 18:14:24 by Dawen Liang <dl2771@columbia.edu>    
+
+"""
 
 import sys, math
 import numpy as np
 import scipy.optimize as optimize
 import scipy.special as special
 
-class Bp_NMF:
-    def __init__(self, X, K=512, init_option='Rand', seed=None, **kwargs):
+class BP_NMF:
+    def __init__(self, X, K=512, smoothness=100, seed=None, **kwargs):
         '''
-        BN = Bp_NMF(X, K=512, init_option='Rand', encoding=False, seed=None, alpha=2., a0=1., b0=1., c0=1e-6, d0=1e-6)
+        BN = Bp_NMF(X, K=512, smoothness=100, seed=None, alpha=2., a0=1., b0=1., c0=1e-6, d0=1e-6)
 
         Required arguments:
             X:              F-by-T nonnegative matrix (numpy.ndarray) 
@@ -23,12 +32,10 @@ class Bp_NMF:
             K:              the size of the initial dictionary
                             will be truncated to a proper size
             
-            init_option:    must be 'Rand' or 'NMF'
-                            The initialization rule to start the inference
-                            'Rand' will init all the parameters randomly
-                            'NMF' will perform a regular NMF and init from there
+            smoothness:     control the concentration of the variational 
+                            parameters
 
-            seed:          the random seed to control the random behavior
+            seed:           the random seed to control the random behavior
 
             alpha:          hyperparameter for activation.
 
@@ -49,7 +56,7 @@ class Bp_NMF:
         else:
             print 'Using fixed seed {}'.format(seed)
             np.random.seed(seed)
-        self._init(init_option)
+        self._init(smoothness)
 
     def _parse_args(self, **kwargs):
         if 'alpha' in kwargs:
@@ -67,63 +74,27 @@ class Bp_NMF:
         else:
             self.c0, self.d0 = 1e-6, 1e-6
 
-    def _init(self, init_option):
-        if init_option == 'Rand':
-            print 'Init with Rand...'
-            # variational parameters for D (Phi)
-            self.mu_phi = np.random.randn(self.F, self.K)
-            self.r_phi = np.random.gamma(2, size=(self.F, self.K))
-            self.ED, self.ED2, _ = _exp(self.mu_phi, self.r_phi)
-            # variational parameters for S (Psi)
-            self.mu_psi = np.random.randn(self.K, self.T)
-            self.r_psi = np.random.gamma(2, size=(self.K, self.T))
-            self.ES, self.ES2, self.ESinv = _exp(self.mu_psi, self.r_psi)
-            # variational parameters for Z
-            self.p_z = np.random.rand(self.K, self.T)
-            self.EZ = self.p_z
-            # variational parameters for pi
-            self.alpha_pi = np.random.rand(self.K)
-            self.beta_pi = np.random.rand(self.K)
-            self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
-            # variational parameters for gamma
-            self.alpha_g, self.beta_g = np.random.gamma(100, 1./100), np.random.gamma(100, 1./100)
-            self.Eg = self.alpha_g / self.beta_g
-
-        if init_option == 'NMF':
-            # actually does poorly
-            try:
-                import pymf
-            except ImportError:
-                print 'No pymf module, init with random...'
-                self._init('Rand')
-                return
-            n_basis = min(self.K, self.T, 100) 
-            print 'Init with NMF ({} basis)...'.format(n_basis)
-            nmf = pymf.NMF(self.X, num_bases=n_basis, niter=100)
-            nmf.initialization()
-            nmf.factorize()
-            # variational parameter for D (Phi)
-            self.ED, self.ED2 = np.zeros((self.F, self.K)), np.zeros((self.F, self.K))
-            self.ED[:,:n_basis], self.ED2[:,:n_basis] = nmf.W, nmf.W**2
-            self.mu_phi, self.r_phi = np.empty((self.F, self.K)), np.empty((self.F, self.K))
-            self.mu_phi[:,:n_basis] = np.log(nmf.W)
-            # variational parameter for S (Psi)
-            self.ES, self.ES2, self.ESinv = np.zeros((self.K, self.T)), np.zeros((self.K, self.T)), np.zeros((self.K, self.T))
-            self.ES[:n_basis,:], self.ES2[:n_basis,:], self.ESinv[:n_basis,:] = nmf.H, nmf.H**2, 1./nmf.H
-            self.mu_psi, self.r_psi = np.empty((self.K, self.T)), np.empty((self.K, self.T))
-            self.mu_psi[:n_basis,:] = np.log(nmf.H)
-            # variational parameter for Z
-            self.p_z = np.zeros((self.K, self.T))
-            self.p_z[:n_basis,:] = 1
-            self.EZ = self.p_z
-            # variational parameter for pi
-            self.alpha_pi = np.random.rand(self.K)
-            self.beta_pi = np.random.rand(self.K)
-            self.Epi = np.zeros((self.K,))
-            self.Epi[:self.T] = 1
-            # variational parameter for gamma
-            self.alpha_g, self.beta_g = np.random.gamma(100, 1./1000), np.random.gamma(100, 1./1000)
-            self.Eg = 1./np.var(self.X - np.dot(self.ED, self.ES*self.EZ))
+    def _init(self, smoothness):
+        # variational parameters for D (Phi)
+        self.mu_phi = np.random.randn(self.F, self.K)
+        self.r_phi = np.random.gamma(2, size=(self.F, self.K))
+        self.sigma_phi = np.sqrt(1./self.r_phi)
+        self.ED, self.ED2, _ = _exp(self.mu_phi, self.r_phi)
+        # variational parameters for S (Psi)
+        self.mu_psi = np.random.randn(self.K, self.T)
+        self.r_psi = np.random.gamma(2, size=(self.K, self.T))
+        self.sigma_psi = np.sqrt(1./self.r_psi)
+        self.ES, self.ES2, self.ESinv = _exp(self.mu_psi, self.r_psi)
+        # variational parameters for Z
+        self.p_z = np.random.rand(self.K, self.T)
+        self.EZ = self.p_z
+        # variational parameters for pi
+        self.alpha_pi = np.random.rand(self.K)
+        self.beta_pi = np.random.rand(self.K)
+        self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
+        # variational parameters for gamma
+        self.alpha_g, self.beta_g = np.random.gamma(smoothness, 1./smoothness), np.random.gamma(smoothness, 1./smoothness)
+        self.Eg = self.alpha_g / self.beta_g
         self.good_k = np.arange(self.K)
 
     def update(self, verbose=True, disp=0):
@@ -216,9 +187,9 @@ class Bp_NMF:
 
 
 
-class LVI_Bp_NMF(Bp_NMF):
+class LVI_BP_NMF(BP_NMF):
     def __init__(self, X, K=512, init_option='Rand', seed=None, **kwargs):
-        super(LVI_Bp_NMF, self).__init__(X, K=K, init_option=init_option, seed=seed, **kwargs)
+        super(LVI_BP_NMF, self).__init__(X, K=K, init_option=init_option, seed=seed, **kwargs)
 
     def update(self, verbose=True, disp=0):
         '''

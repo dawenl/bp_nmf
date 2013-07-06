@@ -60,7 +60,7 @@ q(\gamma_\epsilon) &= \Gamma(\alpha^{(\epsilon)}, \beta^{(\epsilon)})
 
 Thus the Evidence Lower BOund (ELBO):
 \begin{align*}
-\log(P(\mathbf{X})) &\geq \mathbb{E}_q [\log P(\mathbf{X}, \Theta)] - \mathbb{E}_q [\log q(\Theta)]\\
+\log P(\mathbf{X}) &\geq \mathbb{E}_q [\log P(\mathbf{X}, \Theta)] - \mathbb{E}_q [\log q(\Theta)]\\
 &= \mathbb{E}_q [\log P(\mathbf{X} | \mathbf{\Phi}, \mathbf{\Psi}, \mathbf{Z}, \gamma_\epsilon)] + \mathbb{E}_q [\log P(\mathbf{\Phi})] + \mathbb{E}_q [\log P(\mathbf{\Psi})]\\
  &+ \mathbb{E}_q[\log P(\mathbf{Z} | \bm{\pi})] + \mathbb{E}_q[\log P(\bm{\pi})] + \mathbb{E}_q[\log P(\gamma_\epsilon)] + \mathbb{H}_q [q(\Theta)] 
 \end{align*}

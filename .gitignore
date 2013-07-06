@@ -7,6 +7,8 @@
 *.log
 *.aux
 *.gz
+*.mp3
+*.wav
 
 # C extensions
 *.so

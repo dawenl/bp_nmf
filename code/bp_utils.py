@@ -49,18 +49,14 @@ def gsubplot(args=(), cmap=plt.cm.gray_r):
     plt.tight_layout()
     return
 
-def get_data(filename, n_fft, hop_length, sr=22050, reweight=False, amin=1e-10, dbdown=80):
+def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, disp=1):
     x, _ = librosa.load(filename, sr=sr)
     X = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
-    specshow(logspec(X))
-    if reweight:
-        std_col = np.maximum(np.sqrt(np.var(X, axis=1, keepdims=True)), amin)
-    else:
-        std_col = 1.
-    X /= std_col
+    if disp:
+        specshow(logspec(X))
     # cut off values 80db below maximum for numerical consideration
     X = np.maximum(X, 10**(-dbdown/10)*X.max())
-    return (X, std_col)
+    return X
 
 def gen_save_name(id, reweight, n_fft, hop_length, K, good_k=None):
     str_scaled = 'Scale' if reweight else 'Nscale'
@@ -78,28 +74,6 @@ def load_object(filename):
     with open(filename, 'r') as output:
         obj = pickle.load(output)
     return obj 
-
-def train(X, K, init_option, alpha, N, objs=None, RSeed=np.random.seed(),
-        bnmf=None, multi_D=False, multi_S=True, disp=0):
-    if bnmf is None:
-        bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, RSeed=RSeed, alpha=alpha)
-    for n in xrange(N):
-        start_t = time.time()
-        ind = bnmf.update(multi_D=multi_D, multi_S=multi_S, disp=disp)
-        if not ind :
-            if n <= 1:
-                # the initialization can be bad and the first/second iteration will suck, so restart
-                print '***Bad initial values, restart***'
-                return train(X, K, init_option, alpha, N, objs=objs, RSeed=RSeed, multi_D=multi_D, multi_S=multi_S, disp=disp)
-            else:
-                # this should rarely happen
-                print '***Oops***'
-                #sys.exit(-1)
-        t = time.time() - start_t
-        if objs is not None:
-            objs[n] = bnmf.obj
-        print 'Dictionary Learning: Iteration: {}, good K: {}, time: {:.2f}, obj: {}'.format(n, bnmf.good_k.shape[0], t, bnmf.obj)
-    return bnmf
 
 def encode(bnmf, X, K, ED, ED2, init_option, alpha, N, RSeed=np.random.seed(), fmin='LBFGS'):
     bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, encoding=True, RSeed=RSeed, alpha=alpha)

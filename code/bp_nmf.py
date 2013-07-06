@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Beta-Process Sparse NMF
+"""Beta-Process Sparse NMF (BP-NMF)
 
-Two different approaches included for variational inference:
+Two different approaches to variational inference for BP-NMF:
     BP_NMF --> Directly optimizing the ELBO for nonconjugate variables
     LVI_BP_NMF --> Laplace approximation variational inference
 
@@ -14,12 +14,12 @@ CREATED: 2013-04-24 18:14:24 by Dawen Liang <dl2771@columbia.edu>
 
 """
 
-import sys, math
+import sys
 import numpy as np
 import scipy.optimize as optimize
 import scipy.special as special
 
-class BP_NMF:
+class BP_NMF(object):
     def __init__(self, X, K=512, smoothness=100, seed=None, **kwargs):
         '''
         BN = Bp_NMF(X, K=512, smoothness=100, seed=None, alpha=2., a0=1., b0=1., c0=1e-6, d0=1e-6)
@@ -76,11 +76,11 @@ class BP_NMF:
 
     def _init(self, smoothness):
         # variational parameters for D (Phi)
-        self.mu_phi, self.r_phi = np.random.randn(self.F, self.K), np.random.gamma(smoothness, 1./smoothness, size=(self.F, self.K))
+        self.mu_phi, self.r_phi = np.random.randn(self.F, self.K), np.random.gamma(2, size=(self.F, self.K))
         self.sigma_phi = 1./self.r_phi
         self.ED, self.ED2 = comp_expect(self.mu_phi, self.r_phi)
         # variational parameters for S (Psi)
-        self.mu_psi, self.r_psi = np.random.randn(self.K, self.T), np.random.gamma(smoothness, 1./smoothness, size=(self.K, self.T))
+        self.mu_psi, self.r_psi = np.random.randn(self.K, self.T), np.random.gamma(2, size=(self.K, self.T))
         self.sigma_psi = 1./self.r_psi
         self.ES, self.ES2 = comp_expect(self.mu_psi, self.r_psi)
         # variational parameters for Z
@@ -98,8 +98,6 @@ class BP_NMF:
     def update(self, verbose=True, disp=0):
         '''
         Perform dictionary-learning update for one iteration, truncate rarely-used dictionary elements and update the lower bound.  
-
-        return True if sucessfully completed, False otherwise
         '''
         print 'Updating DZS...'
         good_k = self.good_k
@@ -107,7 +105,7 @@ class BP_NMF:
             self.update_phi(k, disp)
             self.update_z(k)
             self.update_psi(k, disp)
-            if verbose and not k % 5:
+            if verbose and not k % 20:
                 sys.stdout.write('.')
         if verbose:
             sys.stdout.write('\n')
@@ -123,13 +121,24 @@ class BP_NMF:
         def f(theta):
             mu, sigma = theta[:self.F], np.exp(theta[-self.F:]) 
             ED, ED2 = comp_expect(mu, 1./sigma)
+            
+            lqterms = np.outer(ED, self.ES[k,:] * self.EZ[k,:]) * Eres - np.outer(ED2, self.ES2[k,:]*self.EZ[k,:])/2 
+            const = -(mu**2 + sigma)/2 - np.log(sigma)/2
+            return -(lqterms.sum() + const.sum())
 
         def df(theta):
             mu, sigma = theta[:self.F], np.exp(theta[-self.F:])
             ED, ED2 = comp_expect(mu, 1./sigma)
+
+            grad_mu = ED * lcoef - ED2 * qcoef - mu
+            grad_sigma = sigma * (ED * lcoef/2 - ED2 * qcoef - 0.5 - 1./(2*sigma))
+            return -np.hstack((grad_mu, grad_sigma))
         
         good_k = self.good_k
         Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
+        lcoef = np.sum(Eres * (self.ES[k,:] * self.EZ[k,:]), axis=1)
+        qcoef = np.sum(self.ES2[k,:] * self.EZ[k,:])
+
         theta0 = np.hstack((self.mu_phi[:,k], np.log(self.sigma_phi[:,k])))
         theta_hat, _, d = optimize.fmin_l_bfgs_b(f, theta0, fprime=df, disp=0)
         self.mu_phi[:,k], self.sigma_phi[:,k] = theta_hat[:self.F], np.exp(theta_hat[-self.F:])
@@ -140,21 +149,36 @@ class BP_NMF:
                 print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(theta_hat))
             else:
                 print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(theta_hat))
-        self.ED[:,k], self.ED2[:,k], _ = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
-        return True 
 
+            app_grad = approx_grad(f, theta_hat)
+            for idx in xrange(self.F):
+                print 'mu[{:3d}, {}] = {:.3f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(idx, k, theta_hat[idx], app_grad[idx], df(theta_hat)[idx], np.abs(app_grad[idx] - df(theta_hat)[idx]))
+                print 'sigma[{:3d}, {}] = {:.3f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(idx, k, np.exp(theta_hat[idx + self.F]), app_grad[idx + self.F], df(theta_hat)[idx + self.F], np.abs(app_grad[idx + self.F] - df(theta_hat)[idx + self.F]))
+
+        self.ED[:,k], self.ED2[:,k] = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
+        return True 
 
     def update_psi(self, k, disp):
         def f(theta):
             mu, sigma = theta[:self.T], np.exp(theta[-self.T:]) 
             ES, ES2 = comp_expect(mu, 1./sigma)
+
+            lqterms = np.outer(self.ED[:,k], ES * self.EZ[k,:]) * Eres - np.outer(self.ED2[:,k], ES2 * self.EZ[k,:])/2
+            const = self.alpha * mu - self.alpha * ES - np.log(sigma)/2
+            return -(lqterms.sum() + const.sum())
             
         def df(theta):
             mu, sigma = theta[:self.T], np.exp(theta[-self.T:]) 
             ES, ES2 = comp_expect(mu, 1./sigma)
+
+            grad_mu = (ES * self.EZ[k,:]) * lcoef - (ES2 * self.EZ[k,:]) * qcoef + self.alpha 
+            grad_sigma = sigma * ((ES * self.EZ[k,:]) * lcoef/2 - (ES2 * self.EZ[k,:]) * qcoef - 1./(2*sigma))
+            return -np.hstack((grad_mu, grad_sigma))
     
         good_k = self.good_k
         Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:]*self.EZ[good_k,:]) + np.outer(self.ED[:,k], self.ES[k,:]*self.EZ[k,:])
+        lcoef = np.sum(self.ED[:,k][:,np.newaxis] * Eres, axis=0) - self.alpha 
+        qcoef = np.sum(self.ED2[:,k]) 
         
         theta0 = np.hstack((self.mu_psi[k,:], np.log(self.sigma_psi[k,:])))
         theta_hat, _, d = optimize.fmin_l_bfgs_b(f, theta0, fprime=df, disp=0)
@@ -199,11 +223,11 @@ class BP_NMF:
         # E[log P(Phi) - log q(Phi)]
         self.obj += -1./2 * np.sum(self.mu_phi**2)  # E[log P(Phi)]
         idx_phi = np.isinf(self.r_phi)
-        self.obj += np.sum(np.log(2*math.pi*math.e/self.r_phi[~idx_phi]))/2 # E[log q(Phi)]
+        self.obj -= np.sum(np.log(self.r_phi[~idx_phi]))/2 # E[log q(Phi)]
         # E[log P(Psi) - log q(Psi)]
         self.obj += np.sum(self.alpha * self.mu_psi - self.alpha * np.exp(self.mu_psi + 1./(2*self.r_psi)))
         idx_psi = np.isinf(self.r_psi)
-        self.obj += np.sum(np.log(2*math.pi*math.e/self.r_psi[~idx_psi]))/2
+        self.obj -= np.sum(np.log(self.r_psi[~idx_psi]))/2
         # E[log P(Z | pi) - log q(Z)]
         idx_pi = (self.Epi != 0) & (self.Epi != 1)
         idx_pz = (self.p_z != 0) & (self.p_z != 1)
@@ -221,8 +245,8 @@ class BP_NMF:
 
 
 class LVI_BP_NMF(BP_NMF):
-    def __init__(self, X, K=512, init_option='Rand', seed=None, **kwargs):
-        super(LVI_BP_NMF, self).__init__(X, K=K, init_option=init_option, seed=seed, **kwargs)
+    def __init__(self, X, K=512, smoothness=100, seed=None, **kwargs):
+        super(LVI_BP_NMF, self).__init__(X, K=K, smoothness=smoothness, seed=seed, **kwargs)
 
     def update(self, verbose=True, disp=0):
         '''
@@ -239,7 +263,7 @@ class LVI_BP_NMF(BP_NMF):
             if not ind_phi or not ind_psi:
                 # LBFGS fucked up
                 return False
-            if verbose and not k % 5:
+            if verbose and not k % 20:
                 sys.stdout.write('.')
         if verbose:
             sys.stdout.write('\n')
@@ -268,7 +292,7 @@ class LVI_BP_NMF(BP_NMF):
             return -(lcoef + 2*qcoef + const)
 
         def df2(phi, f=np.arange(self.F)):
-            lcoef, qcoef = f_stub(phi, f)
+            lcoef, qcoef = f_stub(phi)
             const = -1
             return -(lcoef + 4*qcoef + const)
 
@@ -283,7 +307,7 @@ class LVI_BP_NMF(BP_NMF):
             else:
                 print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(mu_hat))
             return False 
-        self.ED[:,k], self.ED2[:,k], _ = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
+        self.ED[:,k], self.ED2[:,k] = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
         return True 
   
     def update_psi(self, k, disp):

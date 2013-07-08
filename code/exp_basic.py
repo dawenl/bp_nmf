@@ -3,6 +3,14 @@
 
 # <codecell>
 
+"""
+Toy example for BP-NMF
+Better run in IPython Notebook
+
+"""
+
+# <codecell>
+
 import time
 import bp_nmf, librosa
 from bp_utils import *
@@ -21,7 +29,8 @@ threshold = 0.0001
 maxiter = 50
 objs = []
 old_obj = -np.inf
-bnmf = bp_nmf.BP_NMF(X, K=K, seed=357)
+bnmf = bp_nmf.BP_NMF(X, K=K, seed=98765)
+#bnmf = bp_nmf.LVI_BP_NMF(X, K=K, seed=357)
     
 for i in xrange(maxiter):
     start_t = time.time()

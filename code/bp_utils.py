@@ -4,17 +4,11 @@ CREATED: 2013-05-02 05:14:35 by Dawen Liang <dl2771@columbia.edu>
 
 '''
 
-import functools, pickle, time
+import functools
 import numpy as np
 import matplotlib.pyplot as plt
 
-import bp_vbayes
 import librosa
-
-try:
-    import midi
-except ImportError:
-    print 'Warning: midi module not available' 
 
 specshow = functools.partial(plt.imshow, cmap=plt.cm.hot_r, aspect='auto', origin='lower', interpolation='nearest')
 
@@ -35,12 +29,14 @@ def logspec(X, amin=1e-10, dbdown=80):
 
 def gsubplot(args=(), cmap=plt.cm.gray_r):
     ''' General subplot
+   
     Plot all the components passed in vertically. Each element of the arguments should be either a dict with matrix as data and string as title or a matrix.
+
     '''
     nargs = len(args)
     for i in xrange(nargs):
         plt.subplot(nargs, 1, i + 1)
-        if type(args[i]) is dict:
+        if isinstance(args[i], dict):
             specshow(args[i]['D'], cmap=cmap)
             plt.title(args[i]['T'])
         else:
@@ -57,35 +53,6 @@ def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, disp
     # cut off values 80db below maximum for numerical consideration
     X = np.maximum(X, 10**(-dbdown/10)*X.max())
     return X
-
-def gen_save_name(id, reweight, n_fft, hop_length, K, good_k=None):
-    str_scaled = 'Scale' if reweight else 'Nscale'
-    name = 'bnmf_{}_{}_F{}_H{}_K{}'.format(id, str_scaled, n_fft, hop_length, K)
-    if good_k is not None:
-        name += '_GK{}'.format(good_k)
-    return name
-
-def save_object(obj, filename):
-    with open(filename, 'wb') as output:
-        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
-    pass
-
-def load_object(filename):
-    with open(filename, 'r') as output:
-        obj = pickle.load(output)
-    return obj 
-
-def encode(bnmf, X, K, ED, ED2, init_option, alpha, N, RSeed=np.random.seed(), fmin='LBFGS'):
-    bnmf = bp_vbayes.Bp_NMF(X, K=K, init_option=init_option, encoding=True, RSeed=RSeed, alpha=alpha)
-    bnmf.ED, bnmf.ED2 = ED, ED2
-    for n in xrange(N):
-        start_t = time.time()
-        ind = bnmf.encode(fmin=fmin)
-        if not ind:
-            return encode(bnmf, X, K, ED, ED2, init_option, alpha, N, fmin=fmin)
-        t = time.time() - start_t
-        print 'Encoding: Iteration: {}, good K: {}, time: {:.2f}, obj: {}'.format(n, bnmf.good_k.shape[0], t, bnmf.obj)
-    return bnmf
 
 def wiener_mask(W, H, idx=None, amin=1e-10):
     X_rec = np.maximum(np.dot(W, H), amin)
@@ -124,6 +91,12 @@ def midi2notes(filename):
     Only for source separation purposes
     Strong assumption has made to the input midi file: the first track with information, the second track with actual notes
     '''
+    try:
+        import midi
+    except ImportError:
+        print 'Warning: midi module not available' 
+        return None
+
     f = midi.read_midifile(filename)
     f.make_ticks_abs()
     info_track = f[0]

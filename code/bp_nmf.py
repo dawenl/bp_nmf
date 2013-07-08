@@ -76,11 +76,11 @@ class BP_NMF(object):
 
     def _init(self, smoothness):
         # variational parameters for D (Phi)
-        self.mu_phi, self.r_phi = np.random.randn(self.F, self.K), np.random.gamma(2, size=(self.F, self.K))
+        self.mu_phi, self.r_phi = np.random.randn(self.F, self.K), np.random.gamma(smoothness, 1./smoothness, size=(self.F, self.K))
         self.sigma_phi = 1./self.r_phi
         self.ED, self.ED2 = comp_expect(self.mu_phi, self.r_phi)
         # variational parameters for S (Psi)
-        self.mu_psi, self.r_psi = np.random.randn(self.K, self.T), np.random.gamma(2, size=(self.K, self.T))
+        self.mu_psi, self.r_psi = np.random.randn(self.K, self.T), np.random.gamma(smoothness, 1./smoothness, size=(self.K, self.T))
         self.sigma_psi = 1./self.r_psi
         self.ES, self.ES2 = comp_expect(self.mu_psi, self.r_psi)
         # variational parameters for Z
@@ -95,14 +95,15 @@ class BP_NMF(object):
         self.Eg = self.alpha_g / self.beta_g
         self.good_k = np.arange(self.K)
 
-    def update(self, verbose=True, disp=0):
+    def update(self, update_D=True, verbose=True, disp=0):
         '''
         Perform dictionary-learning update for one iteration, truncate rarely-used dictionary elements and update the lower bound.  
         '''
         print 'Updating DZS...'
         good_k = self.good_k
         for k in good_k:
-            self.update_phi(k, disp)
+            if update_D:
+                self.update_phi(k, disp)
             self.update_z(k)
             self.update_psi(k, disp)
             if verbose and not k % 20:
@@ -152,8 +153,8 @@ class BP_NMF(object):
 
             app_grad = approx_grad(f, theta_hat)
             for idx in xrange(self.F):
-                print 'mu[{:3d}, {}] = {:.3f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(idx, k, theta_hat[idx], app_grad[idx], df(theta_hat)[idx], np.abs(app_grad[idx] - df(theta_hat)[idx]))
-                print 'sigma[{:3d}, {}] = {:.3f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(idx, k, np.exp(theta_hat[idx + self.F]), app_grad[idx + self.F], df(theta_hat)[idx + self.F], np.abs(app_grad[idx + self.F] - df(theta_hat)[idx + self.F]))
+                print 'mu[{:3d}, {}] = {:.5f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(idx, k, theta_hat[idx], app_grad[idx], df(theta_hat)[idx], np.abs(app_grad[idx] - df(theta_hat)[idx]))
+                print 'sigma[{:3d}, {}] = {:.5f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(idx, k, np.exp(theta_hat[idx + self.F]), app_grad[idx + self.F], df(theta_hat)[idx + self.F], np.abs(app_grad[idx + self.F] - df(theta_hat)[idx + self.F]))
 
         self.ED[:,k], self.ED2[:,k] = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
         return True 
@@ -190,6 +191,10 @@ class BP_NMF(object):
                 print 'S[{}, :]: {}'.format(k, d['task'])
             else:
                 print 'S[{}, :]: {}'.format(k, d['warnflag'])
+            app_grad = approx_grad(f, theta_hat)
+            for t in xrange(self.T):
+                print 'mu[{}, {:3d}] = {:.5f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(k, t, theta_hat[t], app_grad[t], df(theta_hat)[t], np.abs(app_grad[t] - df(theta_hat)[t]))
+                print 'sigma[{}, {:3d}] = {:.5f}\tApproximated: {:.5f}\tGradient: {:.5f}\t|Approximated - True|: {:.5f}'.format(k, t, np.exp(theta_hat[t + self.T]), app_grad[t + self.T], df(theta_hat)[t + self.T], np.abs(app_grad[t + self.T] - df(theta_hat)[t + self.T]))
         self.ES[k,:], self.ES2[k,:] = comp_expect(self.mu_psi[k,:], self.r_psi[k,:])
         return True 
 
@@ -248,7 +253,28 @@ class LVI_BP_NMF(BP_NMF):
     def __init__(self, X, K=512, smoothness=100, seed=None, **kwargs):
         super(LVI_BP_NMF, self).__init__(X, K=K, smoothness=smoothness, seed=seed, **kwargs)
 
-    def update(self, verbose=True, disp=0):
+    def _init(self, smoothness):
+        # variational parameters for D (Phi)
+        self.mu_phi, self.r_phi = np.random.randn(self.F, self.K), np.random.gamma(2, size=(self.F, self.K))
+        self.sigma_phi = 1./self.r_phi
+        self.ED, self.ED2 = comp_expect(self.mu_phi, self.r_phi)
+        # variational parameters for S (Psi)
+        self.mu_psi, self.r_psi = np.random.randn(self.K, self.T), np.random.gamma(2, size=(self.K, self.T))
+        self.sigma_psi = 1./self.r_psi
+        self.ES, self.ES2 = comp_expect(self.mu_psi, self.r_psi)
+        # variational parameters for Z
+        self.p_z = np.random.rand(self.K, self.T)
+        self.EZ = self.p_z
+        # variational parameters for pi
+        self.alpha_pi = np.random.rand(self.K)
+        self.beta_pi = np.random.rand(self.K)
+        self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
+        # variational parameters for gamma
+        self.alpha_g, self.beta_g = np.random.gamma(smoothness, 1./smoothness), np.random.gamma(smoothness, 1./smoothness)
+        self.Eg = self.alpha_g / self.beta_g
+        self.good_k = np.arange(self.K)
+
+    def update(self, update_D=True, verbose=True, disp=0):
         '''
         Perform dictionary-learning update for one iteration, truncate rarely-used dictionary elements and update the lower bound.  
 
@@ -257,7 +283,8 @@ class LVI_BP_NMF(BP_NMF):
         print 'Updating DZS...'
         good_k = self.good_k
         for k in good_k:
-            ind_phi = self.update_phi(k, disp)
+            if update_D:
+                ind_phi = self.update_phi(k, disp)
             self.update_z(k)
             ind_psi = self.update_psi(k, disp)
             if not ind_phi or not ind_psi:

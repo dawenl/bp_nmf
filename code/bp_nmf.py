@@ -104,14 +104,14 @@ class LVI_BP_NMF:
         return True if L-BFGS optimization successfully completed, False (which may due to the unstable behavior by doing a multi-variate optimization instead of multiple unit-variate optimization) otherwise
 
         Optional arguments:
-            update_D:           true if updating dictionary,
-                                false for encoding
+            update_D:       true if updating dictionary,
+                            false for encoding
 
-            verbose:            output log if true,
-                                one '.' will be write to std out for every 20 updated 
-                                components
+            verbose:        output log if true,
+                            one '.' will be write to std out for every 20 updated 
+                            components
 
-            disp:               display warning from solver if > 0, mainly from LBFGS.               
+            disp:           display warning from solver if > 0, mainly from LBFGS.               
 
         '''
         print 'Updating DZS...'

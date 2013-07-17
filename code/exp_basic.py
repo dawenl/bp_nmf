@@ -24,7 +24,7 @@ objs = []
 old_obj = -np.inf
 bnmf = bp_nmf.LVI_BP_NMF(X, K=K, seed=357)
 
-## Each dot represent 20 updated components, for monitor the progress
+## Each dot represent 20 updated components, for monitoring the progress
     
 for i in xrange(maxiter):
     start_t = time.time()

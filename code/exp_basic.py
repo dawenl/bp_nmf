@@ -3,14 +3,8 @@
 
 # <codecell>
 
+""" Toy example for BP-NMF 
 """
-Toy example for BP-NMF
-Better run in IPython Notebook
-
-"""
-
-# <codecell>
-
 import time
 import bp_nmf, librosa
 from bp_utils import *
@@ -24,13 +18,13 @@ K = 512
 
 # <codecell>
 
-reload(bp_nmf)
 threshold = 0.0001
-maxiter = 50
+maxiter = 100
 objs = []
 old_obj = -np.inf
-bnmf = bp_nmf.BP_NMF(X, K=K, seed=98765)
-#bnmf = bp_nmf.LVI_BP_NMF(X, K=K, seed=357)
+bnmf = bp_nmf.LVI_BP_NMF(X, K=K, seed=357)
+
+## Each dot represent 20 updated components, for monitor the progress
     
 for i in xrange(maxiter):
     start_t = time.time()

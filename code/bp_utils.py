@@ -1,8 +1,8 @@
-''' Useful utils for BP-NMF
+""" Useful utils for BP-NMF
 
 CREATED: 2013-05-02 05:14:35 by Dawen Liang <dl2771@columbia.edu>    
 
-'''
+"""
 
 import functools
 import numpy as np
@@ -54,7 +54,10 @@ def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, disp
     X = np.maximum(X, 10**(-dbdown/10)*X.max())
     return X
 
+## ------------ for blind source separation ---------- ##
 def wiener_mask(W, H, idx=None, amin=1e-10):
+    ''' Constrct the wiener filter mask given the dictionary and activation
+    '''
     X_rec = np.maximum(np.dot(W, H), amin)
     if idx is None:
         L = W.shape[1]
@@ -73,6 +76,8 @@ def wiener_mask(W, H, idx=None, amin=1e-10):
     return mask
 
 def interp_mask(mask):
+    ''' Interpolate the mask by a factor of 2
+    '''
     F, T = mask.shape
     mask_interp = np.zeros((2*F-1, T))
     mask_interp[::2,:] = mask
@@ -80,15 +85,16 @@ def interp_mask(mask):
     return mask_interp
 
 def envelope(x, n_fft, hop_length):
-    '''Get envlope for a clean monophonic signal
+    ''' Get envlope for a clean monophonic signal
+        Simply taking the mean power spectrum
     '''
     X = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
     env = np.mean(X**2, axis=0)
     return env
 
 def midi2notes(filename):
-    '''Load a midi file and get the time (in seconds) of each NoteOn and NoteOff (NoteOn with 0 velocity) event
-    Only for source separation purposes
+    ''' Load a midi file and get the time (in seconds) of each NoteOn and NoteOff (NoteOn with 0 velocity) event
+    Mainly for MIREX F0 estimation data 
     Strong assumption has made to the input midi file: the first track with information, the second track with actual notes
     '''
     try:

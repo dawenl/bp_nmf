@@ -176,6 +176,9 @@ class LVI_BP_NMF:
         return True 
   
     def update_psi(self, k, disp):
+        ''' 
+        Update the activation corresponding to the k-th component
+        '''
         def f_stub(psi):
             lcoef = self.Eg * np.sum(np.outer(self.ED[:,k], np.exp(psi)*self.EZ[k,:]) * Eres, axis=0)
             qcoef = -1./2 * self.Eg * np.sum(np.outer(self.ED2[:,k], np.exp(2*psi)*self.EZ[k,:]), axis=0)
@@ -241,11 +244,11 @@ class LVI_BP_NMF:
         # E[log P(Phi) - log q(Phi)]
         self.obj += -1./2 * np.sum(self.mu_phi**2)  # E[log P(Phi)]
         idx_phi = np.isinf(self.r_phi)
-        self.obj -= np.sum(np.log(self.r_phi[~idx_phi]))/2 # E[log q(Phi)]
+        self.obj -= np.sum(np.log(self.r_phi[-idx_phi]))/2 # E[log q(Phi)]
         # E[log P(Psi) - log q(Psi)]
         self.obj += np.sum(self.alpha * self.mu_psi - self.alpha * np.exp(self.mu_psi + 1./(2*self.r_psi)))
         idx_psi = np.isinf(self.r_psi)
-        self.obj -= np.sum(np.log(self.r_psi[~idx_psi]))/2
+        self.obj -= np.sum(np.log(self.r_psi[-idx_psi]))/2
         # E[log P(Z | pi) - log q(Z)]
         idx_pi = (self.Epi != 0) & (self.Epi != 1)
         idx_pz = (self.p_z != 0) & (self.p_z != 1)

@@ -12,7 +12,8 @@ import bp_nmf, librosa
 
 # Shortcuts
 fig = functools.partial(plt.figure, figsize=(16,4))
-specshow = functools.partial(plt.imshow, cmap=plt.cm.hot_r, aspect='auto', origin='lower', interpolation='nearest')
+specshow = functools.partial(plt.imshow, cmap=plt.cm.hot_r, aspect='auto', 
+        origin='lower', interpolation='nearest')
 
 def logspec(X, amin=1e-10, dbdown=80):
     ''' Compute the spectrogram matrix from STFT matrix
@@ -24,7 +25,8 @@ def logspec(X, amin=1e-10, dbdown=80):
 def gsubplot(args=(), cmap=plt.cm.gray_r):
     ''' General subplot
    
-    Plot all the components passed in vertically. Each element of the arguments should be either a dict with matrix as data and string as title or a matrix.
+    Plot all the components passed in vertically. Each element of the arguments 
+    should be either a dict with matrix as data and string as title or a matrix.
 
     '''
     nargs = len(args)
@@ -69,7 +71,8 @@ def gen_save_name(id, n_fft, hop_length, K, good_k=None):
         name += '_GK{}'.format(good_k)
     return name
 
-def dict_learn(X, K, seed=None, update_D=True, threshold=0.0001, maxiter=50, plot_obj=False):
+def dict_learn(X, K, seed=None, update_D=True, threshold=0.0001, maxiter=50, 
+               plot_obj=False):
     bpnmf = bp_nmf.LVI_BP_NMF(X, K=K, seed=seed)
     old_obj = -np.inf
     old_good_k = -1
@@ -78,8 +81,10 @@ def dict_learn(X, K, seed=None, update_D=True, threshold=0.0001, maxiter=50, plo
         start_t = time.time()
         if not bpnmf.update(update_D=update_D, disp=1):
             if i <= 1:
-                # the initialization can be bad and the first/second iteration will suck, so restart
-                # this can be potentially fixed by doing L-BFGS on each univariate optimization, but will be substantially slower
+                # the initialization can be bad and the first/second iteration
+                # will suck, so restart
+                # this can be potentially fixed by doing L-BFGS on each univariate
+                # optimization, but will be substantially slower
                 print '***Bad initial values, restart***'
                 return None
             else: 
@@ -88,7 +93,9 @@ def dict_learn(X, K, seed=None, update_D=True, threshold=0.0001, maxiter=50, plo
         objs.append(bpnmf.obj)
         improvement = (bpnmf.obj - old_obj) / abs(bpnmf.obj)
         old_obj = bpnmf.obj
-        print 'Iteration: {}, good K: {}, time: {:.2f}, obj: {:.2f} (improvement: {:.5f})'.format(i, bpnmf.good_k.size, t, bpnmf.obj, improvement)
+        print('Iteration: {}, good K: {}, time: {:.2f}'
+                ', obj: {:.2f} (improvement: {:.5f})'.format(i, 
+                    bpnmf.good_k.size, t, bpnmf.obj, improvement))
         if improvement < threshold and old_good_k == bpnmf.good_k.size:
             break    
         old_good_k = bpnmf.good_k.size
@@ -136,9 +143,11 @@ def envelope(x, n_fft, hop_length):
     return env
 
 def midi2notes(filename):
-    ''' Load a midi file and get the time (in seconds) of each NoteOn and NoteOff (NoteOn with 0 velocity) event
+    ''' Load a midi file and get the time (in seconds) of each NoteOn 
+    and NoteOff (NoteOn with 0 velocity) event
     Mainly for MIREX F0 estimation data 
-    Strong assumption has made to the input midi file: the first track with information, the second track with actual notes
+    Strong assumption has made to the input midi file: the first track 
+    with information, the second track with actual notes
     '''
     try:
         import midi

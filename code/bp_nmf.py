@@ -187,9 +187,11 @@ class LVI_BP_NMF:
                 if d['warnflag'] == 2:
                     print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(mu_hat))
                 else:
-                    print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], f(mu_hat))
+                    print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'], 
+                                                        f(mu_hat))
             return False 
-        self.ED[:,k], self.ED2[:,k] = comp_expect(self.mu_phi[:,k], self.r_phi[:,k])
+        self.ED[:,k], self.ED2[:,k] = comp_expect(self.mu_phi[:,k], 
+                                                    self.r_phi[:,k])
         return True 
   
     def update_psi(self, k, disp):
@@ -232,7 +234,8 @@ class LVI_BP_NMF:
                 else:
                     print 'S[{}, :]: {}'.format(k, d['warnflag'])
             return False 
-        self.ES[k,:], self.ES2[k,:] = comp_expect(self.mu_psi[k,:], self.r_psi[k,:])
+        self.ES[k,:], self.ES2[k,:] = comp_expect(self.mu_psi[k,:], 
+                                                    self.r_psi[k,:])
         return True 
 
     def update_z(self, k):
@@ -245,22 +248,24 @@ class LVI_BP_NMF:
                             np.sum(np.outer(self.ED[:,k], 
                             self.ES[k,:]) * Eres, axis=0))
         p0 = special.psi(self.beta_pi[k]) - special.psi(self.alpha_pi[k] 
-                                                        + self.beta_pi[k])
+                + self.beta_pi[k])
         p1 = special.psi(self.alpha_pi[k]) - special.psi(self.alpha_pi[k] 
-                                                        + self.beta_pi[k]) + dummy
+                + self.beta_pi[k]) + dummy
         self.p_z[k,:] = 1./(1 + np.exp(p0 - p1))
         self.EZ[k,:] = self.p_z[k,:]
 
     def update_pi(self):
         self.alpha_pi = self.a0/self.K + np.sum(self.EZ, axis=1)
-        self.beta_pi = self.b0 * (self.K-1) / self.K + self.T - np.sum(self.EZ, axis=1)
+        self.beta_pi = self.b0 * (self.K-1) / self.K + self.T - np.sum(self.EZ, 
+                                                                        axis=1)
         self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
 
     def update_r(self):
         good_k = self.good_k
         self.alpha_g = self.c0 + .5 * self.F * self.T
         self.beta_g = self.d0 + .5 * np.sum((self.X - np.dot(self.ED[:,good_k], 
-                                            self.ES[good_k,:] * self.EZ[good_k,:]))**2)
+                                            self.ES[good_k,:] * 
+                                            self.EZ[good_k,:]))**2)
         self.Eg = self.alpha_g / self.beta_g
 
     def _lower_bound(self):
@@ -285,9 +290,9 @@ class LVI_BP_NMF:
         idx_pi = (self.Epi != 0) & (self.Epi != 1)
         idx_pz = (self.p_z != 0) & (self.p_z != 1)
         self.obj += self.T * np.sum(self.Epi[idx_pi] * np.log(self.Epi[idx_pi]) + 
-                (1-self.Epi[idx_pi]) * np.log(1-self.Epi[idx_pi])) + np.sum(-self.p_z[idx_pz]
-                        * np.log(self.p_z[idx_pz]) - (1-self.p_z[idx_pz]) * 
-                        np.log(1-self.p_z[idx_pz])) 
+                (1-self.Epi[idx_pi]) * np.log(1-self.Epi[idx_pi])) + np.sum(
+                        -self.p_z[idx_pz] * np.log(self.p_z[idx_pz]) - 
+                        (1-self.p_z[idx_pz]) * np.log(1-self.p_z[idx_pz])) 
         # E[log P(pi) - log q(pi)]
         tmp_alpha, tmp_beta = self.a0/self.K, self.b0*(self.K-1)/self.K
         Elog_mpi = np.sum(special.psi(self.beta_pi) -
@@ -303,7 +308,8 @@ class LVI_BP_NMF:
         # E[log P(gamma) - log q(gamma)]
         self.obj += (self.c0 - 1) * (special.psi(self.alpha_g) -
                 np.log(self.beta_g)) - self.d0 * self.Eg     # E[log P(gamma)]
-        self.obj = self.alpha_g - np.log(self.beta_g) + special.gammaln(self.alpha_g) + (1-self.alpha_g) * special.psi(self.alpha_g)
+        self.obj += self.alpha_g - np.log(self.beta_g) + special.gammaln(
+                self.alpha_g) + (1-self.alpha_g) * special.psi(self.alpha_g)
 
 def comp_expect(mu, r):
     '''

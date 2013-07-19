@@ -4,24 +4,18 @@ CREATED: 2013-05-02 05:14:35 by Dawen Liang <dl2771@columbia.edu>
 
 """
 
-import functools
+import functools, pickle, time
 import numpy as np
 import matplotlib.pyplot as plt
 
-import librosa
+import bp_nmf, librosa
 
+# Shortcuts
+fig = functools.partial(plt.figure, figsize=(16,4))
 specshow = functools.partial(plt.imshow, cmap=plt.cm.hot_r, aspect='auto', origin='lower', interpolation='nearest')
 
 def logspec(X, amin=1e-10, dbdown=80):
     ''' Compute the spectrogram matrix from STFT matrix
-
-    Required arguments:
-        X:          F by T STFT matrix (numpy.ndarray)
-
-    Optional arguments:
-        amin:       minimum amplitude threshold
-
-        dbdown:     the minimum db below the maximum value
 
     '''
     logX = 20 * np.log10(np.maximum(X, amin))
@@ -46,6 +40,9 @@ def gsubplot(args=(), cmap=plt.cm.gray_r):
     return
 
 def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, disp=1):
+    ''' Load data with the specific fft size, hop length and sample rate
+
+    '''
     x, _ = librosa.load(filename, sr=sr)
     X = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
     if disp:
@@ -53,6 +50,52 @@ def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, disp
     # cut off values 80db below maximum for numerical consideration
     X = np.maximum(X, 10**(-dbdown/10)*X.max())
     return X
+
+## save/load bp_nmf objects
+def save_object(obj, filename):
+    with open(filename, 'wb') as output:
+        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
+    pass
+
+def load_object(filename):
+    with open(filename, 'r') as output:
+        obj = pickle.load(output)
+    return obj 
+
+## generate a name for bp_nmf object
+def gen_save_name(id, n_fft, hop_length, K, good_k=None):
+    name = 'bpnmf_{}_F{}_H{}_K{}'.format(id, n_fft, hop_length, K)
+    if good_k is not None:
+        name += '_GK{}'.format(good_k)
+    return name
+
+def dict_learn(X, K, seed=None, update_D=True, threshold=0.0001, maxiter=50, plot_obj=False):
+    bpnmf = bp_nmf.LVI_BP_NMF(X, K=K, seed=seed)
+    old_obj = -np.inf
+    old_good_k = -1
+    objs = []
+    for i in xrange(maxiter):
+        start_t = time.time()
+        if not bpnmf.update(update_D=update_D, disp=1):
+            if i <= 1:
+                # the initialization can be bad and the first/second iteration will suck, so restart
+                # this can be potentially fixed by doing L-BFGS on each univariate optimization, but will be substantially slower
+                print '***Bad initial values, restart***'
+                return None
+            else: 
+                print '***Oops***'
+        t = time.time() - start_t
+        objs.append(bpnmf.obj)
+        improvement = (bpnmf.obj - old_obj) / abs(bpnmf.obj)
+        old_obj = bpnmf.obj
+        print 'Iteration: {}, good K: {}, time: {:.2f}, obj: {:.2f} (improvement: {:.5f})'.format(i, bpnmf.good_k.size, t, bpnmf.obj, improvement)
+        if improvement < threshold and old_good_k == bpnmf.good_k.size:
+            break    
+        old_good_k = bpnmf.good_k.size
+    if plot_obj:
+        plt.figure()
+        plt.plot(objs)
+    return bpnmf
 
 ## ------------ for blind source separation ---------- ##
 def wiener_mask(W, H, idx=None, amin=1e-10):

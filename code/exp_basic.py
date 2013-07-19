@@ -33,7 +33,7 @@ for i in xrange(maxiter):
     objs.append(bnmf.obj)
     improvement = (bnmf.obj - old_obj) / abs(bnmf.obj)
     old_obj = bnmf.obj
-    print 'Iteration: {}, good K: {}, time: {:.2f}, obj: {:.2f} (improvement: {:.4f})'.format(i, bnmf.good_k.shape[0], t, bnmf.obj, improvement)
+    print 'Iteration: {}, good K: {}, time: {:.2f}, obj: {:.2f} (improvement: {:.4f})'.format(i, bnmf.good_k.size, t, bnmf.obj, improvement)
     if improvement < threshold:
         break
 

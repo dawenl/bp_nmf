@@ -119,6 +119,8 @@ class LVI_BP_NMF:
         for k in good_k:
             if update_D:
                 ind_phi = self.update_phi(k, disp)
+            else:
+                ind_phi = True
             self.update_z(k)
             ind_psi = self.update_psi(k, disp)
             if not ind_phi or not ind_psi:

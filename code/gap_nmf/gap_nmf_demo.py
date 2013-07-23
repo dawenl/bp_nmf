@@ -22,6 +22,13 @@ X = np.abs(librosa.stft(x, n_fft=512, hop_length=256))
 
 # <codecell>
 
+fig()
+specshow(20 * np.log10(X))
+colorbar()
+pass
+
+# <codecell>
+
 obj = gap_nmf.GaP_NMF(X, K=50, seed=98765)
 
 # <codecell>

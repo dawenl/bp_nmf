@@ -148,7 +148,7 @@ class GaP_NMF:
         idx = np.where(powers[sorted] > cut_off * np.amax(powers))[0]
         goodk = sorted[:(idx[-1] + 1)]
         if powers[goodk[-1]] < cut_off:
-            np.delete(goodk, -1)
+            goodk = np.delete(goodk, -1)
         return goodk
 
     def clear_badk(self):

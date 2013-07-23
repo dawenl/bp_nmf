@@ -220,7 +220,8 @@ class GaP_NMF:
 
     def _xtwid(self, goodk):
         dEtinvinv = self.Etinvinv[goodk]
-        return np.dot(self.Ewinvinv[:, goodk], dEtinvinv[:, np.newaxis] * self.Ehinvinv[goodk, :])
+        return np.dot(self.Ewinvinv[:, goodk], dEtinvinv[:, np.newaxis] * 
+                self.Ehinvinv[goodk, :])
 
 
 

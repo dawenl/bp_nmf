@@ -41,7 +41,8 @@ def gsubplot(args=(), cmap=plt.cm.gray_r):
     plt.tight_layout()
     return
 
-def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, disp=1):
+def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80, 
+              disp=1):
     ''' Load data with the specific fft size, hop length and sample rate
 
     '''
@@ -88,13 +89,17 @@ def dict_learn(X, K, seed=None, update_D=True, threshold=0.0001, maxiter=50,
                 print '***Bad initial values, restart***'
                 return None
             else: 
+                # This should rarely happen 
+                # If this happens in the late iteration, then we are almost done
+                # return may not be the best idea, we are still getting something 
                 print '***Oops***'
+                return bpnmf
         t = time.time() - start_t
         objs.append(bpnmf.obj)
         improvement = (bpnmf.obj - old_obj) / abs(bpnmf.obj)
         old_obj = bpnmf.obj
-        print('Iteration: {}, good K: {}, time: {:.2f}'
-                ', obj: {:.2f} (improvement: {:.5f})'.format(i, 
+        print('Iteration: {}, good K: {}, time: {:.2f}, '
+                'obj: {:.2f} (improvement: {:.5f})'.format(i, 
                     bpnmf.good_k.size, t, bpnmf.obj, improvement))
         if improvement < threshold and old_good_k == bpnmf.good_k.size:
             break    

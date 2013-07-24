@@ -3,7 +3,7 @@ Python translation of MATALB code for GaP-NMF as in:
 
     Bayesian Nonparametric Matrix Factorization for Recorded Music
 
-    by Matthew D. Hoffman et al. in ICML2010
+    by Matthew D. Hoffman et al. in ICML 2010
 
 The original MATLAB code: http://www.cs.princeton.edu/~mdhoffma/code/gapnmfmatlab.tar
     

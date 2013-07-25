@@ -8,8 +8,12 @@ A Bayesian nonparametric extension of Nonnegative Matrix Factorization (NMF).
 **Note of Note**: Since for all the nonconjugate variables update, we are essentially solving an numerical optimization problem with L-BFGS (and haven't figured out a way to do multiplicative-type of update yet), BP-NMF can take quite a while if the input matrix is large (> 2 minutes of 22.05 kHz signals with 1024-point DFT and 50% overlap). Try not to process a huge recording.
 
 ### Folder structure:
-* code: contains the code for inference, utils, the experiments. **Note**: All the files with the name `exp_*.py` are meant to run with [IPython Notebook](http://ipython.org/notebook.html). Also, [librosa](https://github.com/bmcfee/librosa) is required for all the signal processing components in the experiments sciprts. 
-* notes: a detailed derivation of the full variational inference
+#### code: 
+Contains the code for inference, utils, the experiments. **Note**: All the files with the name `exp_*.py` are meant to run with [IPython Notebook](http://ipython.org/notebook.html). Also, [librosa](https://github.com/bmcfee/librosa) is required for all the signal processing components in the experiments sciprts. 
+
+There is also a Python translation of the gamma process NMF (GaP-NMF) where the original MATLAB code is developed by [Matt Hoffman](http://www.cs.princeton.edu/~mdhoffma/).
+####notes: 
+A detailed derivation of the full variational inference.
 
 ### Dependencies:
 * numpy 

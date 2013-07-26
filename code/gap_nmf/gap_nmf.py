@@ -96,7 +96,7 @@ class GaP_NMF:
 
     def update_w(self):
         goodk = self.goodk()
-        xxtwidinvsq = (self.X * self._xtwid(goodk)) ** (-2)
+        xxtwidinvsq = self.X * self._xtwid(goodk)**(-2)
         xbarinv = self._xbar(goodk) ** (-1)
         dEt = self.Et[goodk]
         dEtinvinv = self.Etinvinv[goodk]
@@ -111,7 +111,7 @@ class GaP_NMF:
 
     def update_h(self):
         goodk = self.goodk()
-        xxtwidinvsq = (self.X * self._xtwid(goodk)) ** (-2)
+        xxtwidinvsq = self.X * self._xtwid(goodk)**(-2)
         xbarinv = self._xbar(goodk) ** (-1)
         dEt = self.Et[goodk]
         dEtinvinv = self.Etinvinv[goodk]
@@ -127,7 +127,7 @@ class GaP_NMF:
 
     def update_theta(self):
         goodk = self.goodk()
-        xxtwidinvsq = (self.X * self._xtwid(goodk)) ** (-2)
+        xxtwidinvsq = self.X * self._xtwid(goodk)**(-2)
         xbarinv = self._xbar(goodk) ** (-1)
         self.rhot[goodk] = self.alpha + np.sum(np.dot(self.Ew[:, goodk].T,
             xbarinv) * self.Eh[goodk, :], axis=1)

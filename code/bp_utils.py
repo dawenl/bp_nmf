@@ -56,6 +56,7 @@ def load_data(filename, n_fft, hop_length, sr=22050, amin=1e-10, dbdown=80,
     X = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
     if disp:
         specshow(logspec(X))
+        plt.colorbar()
     # cut off values 80db below maximum for numerical consideration
     X = np.maximum(X, 10**(-dbdown/10)*X.max())
     return X

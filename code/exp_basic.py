@@ -53,36 +53,33 @@ res = X - Xres
 ## Original v.s. Reconstruction
 figure(1)
 gsubplot(args=({'D':logspec(X), 'T':'Original Spectrogram'}, 
-            {'D':logspec(Xres), 'T':'Reconstruction '} , 
-            {'D':res, 'T':'Reconstruction Error'}), cmap=cm.hot_r)
+               {'D':logspec(Xres), 'T':'Reconstruction '} , 
+               {'D':res, 'T':'Reconstruction Error'}), cmap=cm.hot_r)
 ## Plot decomposition
 idx = flipud(argsort(bnmf.Epi[good_k]))
-tmpED = bnmf.ED[:,good_k[idx]].copy()
-tmpED /= np.max(tmpED, axis=0, keepdims=True)
-tmpES = bnmf.ES[good_k[idx],:].copy()
-tmpES *= np.max(bnmf.ED[:,good_k[idx]], axis=0, keepdims=True).T
+# normalize the dictionary so that each component has maximum 1
+ED = bnmf.ED[:,good_k[idx]]
+ED /= np.max(ED, axis=0, keepdims=True)
+ES = bnmf.ES[good_k[idx],:]
+ES *= np.max(bnmf.ED[:,good_k[idx]], axis=0, keepdims=True).T
+EZ = around(bnmf.EZ[good_k[idx],:])
 figure(2)
-gsubplot(args=({'D':logspec(tmpED), 'T':'ED'}, 
-            {'D':around(bnmf.EZ[good_k[idx],:]), 'T':'EZ'}, 
-            {'D':logspec((around(bnmf.EZ[good_k[idx],:])*tmpES)[:,-1000:]), 'T':'ES*EZ'}), cmap=cm.hot_r)
+gsubplot(args=({'D':logspec(ED), 'T':'ED'}, 
+               {'D':EZ, 'T':'EZ'}, 
+               {'D':logspec(EZ*ES), 'T':'ES*EZ'}), cmap=cm.hot_r)
 figure(3)
 plot(flipud(sort(bnmf.Epi[good_k])), '-o')
 title('Expected membership prior Pi')
-figure(4)
-tmpED = bnmf.ED[:,good_k[idx]].copy()
-tmpED /= np.sum(tmpED**2, axis=0)**0.5
-gsubplot(args=(dot(tmpED.T, tmpED),), cmap=cm.hot_r)
 
 # <codecell>
 
-tmpEZ = around(bnmf.EZ[good_k[idx],:])
 figure(1)
 num = len(good_k)
 for i in xrange(0,2*num,2):
     subplot(num, 2, i+1)
-    plot(10*log10(tmpED[:, i/2]))
+    plot(10*log10(ED[:, i/2]))
     subplot(num, 2, i+2)
-    plot((tmpEZ * tmpES)[i/2,:])
+    plot((EZ * ES)[i/2,:])
 tight_layout()
 
 # <codecell>

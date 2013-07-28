@@ -6,8 +6,10 @@
 """ Toy example for BP-NMF 
 """
 import time
-import bp_nmf, librosa
+
+import bp_nmf
 from bp_utils import *
+import librosa
 
 # <codecell>
 
@@ -47,7 +49,15 @@ pass
 
 good_k = bnmf.good_k
 
-Xres = dot(bnmf.ED, bnmf.ES * around(bnmf.EZ))
+idx = flipud(argsort(bnmf.Epi[good_k]))
+# normalize the dictionary so that each component has maximum 1
+ED = bnmf.ED[:,good_k[idx]]
+ED /= np.max(ED, axis=0, keepdims=True)
+ES = bnmf.ES[good_k[idx],:]
+ES *= np.max(bnmf.ED[:,good_k[idx]], axis=0, keepdims=True).T
+EZ = around(bnmf.EZ[good_k[idx],:])
+
+Xres = dot(ED, ES * EZ)
 res = X - Xres
 
 ## Original v.s. Reconstruction
@@ -56,13 +66,6 @@ gsubplot(args=({'D':logspec(X), 'T':'Original Spectrogram'},
                {'D':logspec(Xres), 'T':'Reconstruction '} , 
                {'D':res, 'T':'Reconstruction Error'}), cmap=cm.hot_r)
 ## Plot decomposition
-idx = flipud(argsort(bnmf.Epi[good_k]))
-# normalize the dictionary so that each component has maximum 1
-ED = bnmf.ED[:,good_k[idx]]
-ED /= np.max(ED, axis=0, keepdims=True)
-ES = bnmf.ES[good_k[idx],:]
-ES *= np.max(bnmf.ED[:,good_k[idx]], axis=0, keepdims=True).T
-EZ = around(bnmf.EZ[good_k[idx],:])
 figure(2)
 gsubplot(args=({'D':logspec(ED), 'T':'ED'}, 
                {'D':EZ, 'T':'EZ'}, 
@@ -70,12 +73,13 @@ gsubplot(args=({'D':logspec(ED), 'T':'ED'},
 figure(3)
 plot(flipud(sort(bnmf.Epi[good_k])), '-o')
 title('Expected membership prior Pi')
+pass
 
 # <codecell>
 
 figure(1)
 num = len(good_k)
-for i in xrange(0,2*num,2):
+for i in xrange(0, 2*num, 2):
     subplot(num, 2, i+1)
     plot(10*log10(ED[:, i/2]))
     subplot(num, 2, i+2)

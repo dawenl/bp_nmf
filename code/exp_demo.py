@@ -77,7 +77,7 @@ pass
 
 # <codecell>
 
-figure(1)
+fig(figsize=(16, 10))
 num = len(good_k)
 for i in xrange(0, 2*num, 2):
     subplot(num, 2, i+1)

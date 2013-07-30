@@ -37,7 +37,10 @@ class LVI_BP_NMF:
             smoothness:     control the concentration of the variational
                             parameters
 
-            seed:           the random seed to control the random behavior
+            seed:           the random seed to control the random
+                            initialization
+                            **variational inference can only converge to local
+                            optimum, thus try different seeds**
 
             alpha:          hyperparameter for activation.
 

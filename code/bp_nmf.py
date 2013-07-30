@@ -19,6 +19,7 @@ import numpy as np
 import scipy.optimize as optimize
 import scipy.special as special
 
+
 class LVI_BP_NMF:
     def __init__(self, X, K=512, smoothness=100, seed=None, **kwargs):
         '''
@@ -82,12 +83,12 @@ class LVI_BP_NMF:
         # variational parameters for D (Phi)
         self.mu_phi = np.random.randn(self.F, self.K)
         self.r_phi = np.random.gamma(2, size=(self.F, self.K))
-        self.sigma_phi = 1./self.r_phi
+        self.sigma_phi = 1. / self.r_phi
         self.ED, self.ED2 = comp_expect(self.mu_phi, self.r_phi)
         # variational parameters for S (Psi)
         self.mu_psi = np.random.randn(self.K, self.T)
         self.r_psi = np.random.gamma(2, size=(self.K, self.T))
-        self.sigma_psi = 1./self.r_psi
+        self.sigma_psi = 1. / self.r_psi
         self.ES, self.ES2 = comp_expect(self.mu_psi, self.r_psi)
         # variational parameters for Z
         self.p_z = np.random.rand(self.K, self.T)
@@ -97,8 +98,8 @@ class LVI_BP_NMF:
         self.beta_pi = np.random.rand(self.K)
         self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
         # variational parameters for gamma
-        self.alpha_g = np.random.gamma(smoothness, 1./smoothness)
-        self.beta_g = np.random.gamma(smoothness, 1./smoothness)
+        self.alpha_g = np.random.gamma(smoothness, 1. / smoothness)
+        self.beta_g = np.random.gamma(smoothness, 1. / smoothness)
         self.Eg = self.alpha_g / self.beta_g
         self.good_k = np.arange(self.K)
 
@@ -156,46 +157,45 @@ class LVI_BP_NMF:
         '''
         def f_stub(phi):
             lcoef = self.Eg * np.sum(
-                np.outer(np.exp(phi), self.ES[k,:] * self.EZ[k,:])
-                * Eres, axis=1)
-            qcoef = -1./2 * self.Eg * np.sum(
-                np.outer(np.exp(2*phi), self.ES2[k,:] * self.EZ[k,:]),
-                axis=1)
+                np.outer(np.exp(phi), self.ES[k] * self.EZ[k]) * Eres, axis=1)
+            qcoef = -.5 * self.Eg * np.sum(
+                np.outer(np.exp(2 * phi), self.ES2[k] * self.EZ[k]), axis=1)
             return (lcoef, qcoef)
 
         def f(phi):
             lcoef, qcoef = f_stub(phi)
-            const = -1./2*phi**2
+            const = -.5 * phi**2
             return -np.sum(lcoef + qcoef + const)
 
         def df(phi):
             lcoef, qcoef = f_stub(phi)
             const = -phi
-            return -(lcoef + 2*qcoef + const)
+            return -(lcoef + 2 * qcoef + const)
 
         def df2(phi, f=np.arange(self.F)):
             lcoef, qcoef = f_stub(phi)
             const = -1
-            return -(lcoef + 4*qcoef + const)
+            return -(lcoef + 4 * qcoef + const)
 
         good_k = self.good_k
-        Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:] *
-                               self.EZ[good_k,:]) + np.outer(self.ED[:,k],
-                                                             self.ES[k,:] *
-                                                             self.EZ[k,:])
-        phi0 = self.mu_phi[:,k]
+        Eres = self.X - np.dot(self.ED[:, good_k], self.ES[good_k] *
+                               self.EZ[good_k]) + np.outer(self.ED[:, k],
+                                                           self.ES[k] *
+                                                           self.EZ[k])
+        phi0 = self.mu_phi[:, k]
         mu_hat, _, d = optimize.fmin_l_bfgs_b(f, phi0, fprime=df, disp=0)
-        self.mu_phi[:,k], self.r_phi[:,k] = mu_hat, df2(mu_hat)
-        if np.any(self.r_phi[:,k] <= 0):
+        self.mu_phi[:, k], self.r_phi[:, k] = mu_hat, df2(mu_hat)
+        if np.any(self.r_phi[:, k] <= 0):
             if disp:
                 if d['warnflag'] == 2:
-                    print 'D[:, {}]: {}, f={}'.format(k, d['task'], f(mu_hat))
+                    print 'D[:, {}]: {}, f={}'.format(k, d['task'],
+                                                      f(mu_hat))
                 else:
                     print 'D[:, {}]: {}, f={}'.format(k, d['warnflag'],
                                                       f(mu_hat))
             return False
-        self.ED[:,k], self.ED2[:,k] = comp_expect(self.mu_phi[:,k],
-                                                  self.r_phi[:,k])
+        self.ED[:, k], self.ED2[:, k] = comp_expect(self.mu_phi[:, k],
+                                                    self.r_phi[:, k])
         return True
 
     def update_psi(self, k, disp):
@@ -203,11 +203,11 @@ class LVI_BP_NMF:
         Update the activation corresponding to the k-th component
         '''
         def f_stub(psi):
-            lcoef = self.Eg * np.sum(np.outer(self.ED[:,k], np.exp(psi) *
-                                              self.EZ[k,:]) * Eres, axis=0)
-            qcoef = -1./2 * self.Eg * np.sum(np.outer(self.ED2[:,k],
-                                                      np.exp(2*psi) *
-                                                      self.EZ[k,:]), axis=0)
+            lcoef = self.Eg * np.sum(np.outer(self.ED[:, k], np.exp(psi) *
+                                              self.EZ[k]) * Eres, axis=0)
+            qcoef = -.5 * self.Eg * np.sum(np.outer(self.ED2[:, k],
+                                                    np.exp(2 * psi) *
+                                                    self.EZ[k]), axis=0)
             return (lcoef, qcoef)
 
         def f(psi):
@@ -218,62 +218,62 @@ class LVI_BP_NMF:
         def df(psi):
             lcoef, qcoef = f_stub(psi)
             const = self.alpha - self.alpha * np.exp(psi)
-            return -(lcoef + 2*qcoef + const)
+            return -(lcoef + 2 * qcoef + const)
 
         def df2(psi):
             lcoef, qcoef = f_stub(psi)
             const = -self.alpha * np.exp(psi)
-            return -(lcoef + 4*qcoef + const)
+            return -(lcoef + 4 * qcoef + const)
 
         good_k = self.good_k
-        Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:] *
-                               self.EZ[good_k,:]) + np.outer(self.ED[:,k],
-                                                             self.ES[k,:] *
-                                                             self.EZ[k,:])
-        psi0 = self.mu_psi[k,:]
+        Eres = self.X - np.dot(self.ED[:, good_k], self.ES[good_k] *
+                               self.EZ[good_k]) + np.outer(self.ED[:, k],
+                                                           self.ES[k] *
+                                                           self.EZ[k])
+        psi0 = self.mu_psi[k]
         mu_hat, _, d = optimize.fmin_l_bfgs_b(f, psi0, fprime=df, disp=0)
-        self.mu_psi[k,:], self.r_psi[k,:] = mu_hat, df2(mu_hat)
-        if np.any(self.r_psi[k, :] <= 0):
+        self.mu_psi[k], self.r_psi[k] = mu_hat, df2(mu_hat)
+        if np.any(self.r_psi[k] <= 0):
             if disp:
                 if d['warnflag'] == 2:
                     print 'S[{}, :]: {}'.format(k, d['task'])
                 else:
                     print 'S[{}, :]: {}'.format(k, d['warnflag'])
             return False
-        self.ES[k,:], self.ES2[k,:] = comp_expect(self.mu_psi[k,:],
-                                                  self.r_psi[k,:])
+        self.ES[k], self.ES2[k] = comp_expect(self.mu_psi[k],
+                                              self.r_psi[k])
         return True
 
     def update_z(self, k):
         good_k = self.good_k
-        Eres = self.X - np.dot(self.ED[:,good_k], self.ES[good_k,:] *
-                               self.EZ[good_k,:]) + np.outer(self.ED[:,k],
-                                                             self.ES[k,:] *
-                                                             self.EZ[k,:])
-        dummy = self.Eg * (-.5 * np.outer(self.ED2[:,k],
-                                          self.ES2[k,:]).sum(axis=0) +
-                           np.sum(np.outer(self.ED[:,k],
-                                           self.ES[k,:]) * Eres, axis=0))
+        Eres = self.X - np.dot(self.ED[:, good_k], self.ES[good_k] *
+                               self.EZ[good_k]) + np.outer(self.ED[:, k],
+                                                           self.ES[k] *
+                                                           self.EZ[k])
+        dummy = self.Eg * (-.5 * np.sum(np.outer(self.ED2[:, k],
+                                                 self.ES2[k]), axis=0) +
+                           np.sum(np.outer(self.ED[:, k],
+                                           self.ES[k]) * Eres, axis=0))
         p0 = special.psi(self.beta_pi[k]) - special.psi(self.alpha_pi[k]
                                                         + self.beta_pi[k])
         p1 = special.psi(self.alpha_pi[k]) - special.psi(
             self.alpha_pi[k] + self.beta_pi[k]) + dummy
-        self.p_z[k,:] = 1./(1 + np.exp(p0 - p1))
-        self.EZ[k,:] = self.p_z[k,:]
+        self.p_z[k] = 1. / (1 + np.exp(p0 - p1))
+        self.EZ[k] = self.p_z[k]
 
     def update_pi(self):
-        self.alpha_pi = self.a0/self.K + np.sum(self.EZ, axis=1)
-        self.beta_pi = self.b0 * (self.K - 1)/self.K + self.T - np.sum(self.EZ,
-                                                                       axis=1)
+        self.alpha_pi = self.a0 / self.K + np.sum(self.EZ, axis=1)
+        self.beta_pi = self.b0 * (self.K - 1) / self.K + self.T - np.sum(
+            self.EZ, axis=1)
         self.Epi = self.alpha_pi / (self.alpha_pi + self.beta_pi)
 
     def update_r(self):
         good_k = self.good_k
         self.alpha_g = self.c0 + .5 * self.F * self.T
         self.beta_g = self.d0 + .5 * np.sum((self.X -
-                                             np.dot(self.ED[:,good_k],
-                                                    self.ES[good_k,:] *
-                                                    self.EZ[good_k,:]))**2)
+                                             np.dot(self.ED[:, good_k],
+                                                    self.ES[good_k] *
+                                                    self.EZ[good_k]))**2)
         self.Eg = self.alpha_g / self.beta_g
 
     def _lower_bound(self):
@@ -282,24 +282,22 @@ class LVI_BP_NMF:
         Xres2 = np.dot(self.ED2, self.ES2 * self.EZ)
         EetaX =  self.Eg * (self.X * Xres - .5 * self.X**2)
         EAeta = .5 * self.Eg * (Xres2 + (Xres**2 -
-                                           np.dot(self.ED**2,
-                                                  self.ES**2 * self.EZ)))
+                                         np.dot(self.ED**2,
+                                                self.ES**2 * self.EZ)))
         EAeta -= .5 * (special.psi(self.alpha_g) - np.log(self.beta_g))
         self.obj = np.sum(EetaX - EAeta)
         # E[log P(Phi) - log q(Phi)]
-        # E[log P(Phi)]
         self.obj += -.5 * np.sum(self.mu_phi**2)
         idx_phi = np.isinf(self.r_phi)
-        # E[log q(Phi)]
         self.obj -= .5 * np.sum(np.log(self.r_phi[-idx_phi]))
         # E[log P(Psi) - log q(Psi)]
         self.obj += np.sum(self.alpha * self.mu_psi - self.alpha *
-                           np.exp(self.mu_psi + 1./(2 * self.r_psi)))
+                           np.exp(self.mu_psi + 1. / (2 * self.r_psi)))
         idx_psi = np.isinf(self.r_psi)
         self.obj -= .5 * np.sum(np.log(self.r_psi[-idx_psi]))
         # E[log P(Z | pi) - log q(Z)]
-        idx_pi = (self.Epi != 0) & (self.Epi != 1)
-        idx_pz = (self.p_z != 0) & (self.p_z != 1)
+        idx_pi = np.logical_and((self.Epi != 0), (self.Epi != 1))
+        idx_pz = np.logical_and((self.p_z != 0), (self.p_z != 1))
         self.obj += self.T * np.sum(self.Epi[idx_pi] *
                                     np.log(self.Epi[idx_pi]) +
                                     (1 - self.Epi[idx_pi]) *
@@ -308,7 +306,7 @@ class LVI_BP_NMF:
                            (1 - self.p_z[idx_pz]) *
                            np.log(1 - self.p_z[idx_pz]))
         # E[log P(pi) - log q(pi)]
-        tmp_alpha, tmp_beta = self.a0/self.K, self.b0 * (self.K-1)/self.K
+        tmp_alpha, tmp_beta = self.a0 / self.K, self.b0 * (self.K - 1) / self.K
         Elog_mpi = np.sum(special.psi(self.beta_pi) -
                           special.psi(self.alpha_pi + self.beta_pi))
         Elog_pi = np.sum(special.psi(self.alpha_pi) -
@@ -320,10 +318,8 @@ class LVI_BP_NMF:
                            (self.alpha_pi + self.beta_pi - 2) *
                            special.psi(self.alpha_pi + self.beta_pi))
         # E[log P(gamma) - log q(gamma)]
-        # E[log P(gamma)]
         self.obj += (self.c0 - 1) * (special.psi(self.alpha_g) -
                                      np.log(self.beta_g)) - self.d0 * self.Eg
-        # E[log q(gamma)]
         self.obj += self.alpha_g - np.log(self.beta_g)
         self.obj += special.gammaln(
             self.alpha_g) + (1 - self.alpha_g) * special.psi(self.alpha_g)
@@ -334,4 +330,4 @@ def comp_expect(mu, r):
     Given mean and precision of a Gaussian r.v. theta ~ N(mu, 1/r), compute
     E[exp(theta)] and E[exp(2*theta)]
     '''
-    return (np.exp(mu + 1./(2*r)), np.exp(2*mu + 2./r))
+    return (np.exp(mu + 1. / (2 * r)), np.exp(2 * mu + 2. / r))

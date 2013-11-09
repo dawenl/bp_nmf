@@ -67,20 +67,12 @@ class LVI_BP_NMF:
         '''
         Parse the hyperparameters
         '''
-        if 'alpha' in kwargs:
-            self.alpha = kwargs['alpha']
-        else:
-            self.alpha = 2.
+        self.alpha = float(kwargs.get('alpha', 2.))
 
-        if 'a0' in kwargs and 'b0' in kwargs:
-            self.a0, self.b0 = kwargs['a0'], kwargs['b0']
-        else:
-            self.a0, self.b0 = 1., 1.
-
-        if 'c0' in kwargs and 'd0' in kwargs:
-            self.c0, self.d0 = kwargs['c0'], kwargs['d0']
-        else:
-            self.c0, self.d0 = 1e-6, 1e-6
+        self.a0, self.b0 = float(kwargs.get('a0', 1.)), float(kwargs.get('b0',
+                                                                         1.))
+        self.c0, self.d0 = float(kwargs.get('c0', 1e-6)), float(kwargs.get('d0',
+                                                                           1e-6))
 
     def _init(self, smoothness):
         # variational parameters for D (Phi)

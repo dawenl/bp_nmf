@@ -1,7 +1,8 @@
 Beta Process Sparse NMF (BP-NMF)
 ======
 
-A Bayesian nonparametric extension of Nonnegative Matrix Factorization (NMF). 
+A Bayesian nonparametric extension of Nonnegative Matrix Factorization (NMF) as described in the paper:
+[Beta Process Sparse Nonnegative Matrix Factorization for Music](http://www.ppgia.pucpr.br/ismir2013/wp-content/uploads/2013/09/229_Paper.pdf). 
 
 **Note**: BP-NMF uses L-BFGS-B solver from [scipy.optimize](http://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin_l_bfgs_b.html#scipy.optimize.fmin_l_bfgs_b) to jointly optimize multiple univariate functions, which may lead to numerically-unstable result. For more stable result (but much slower), one can replace L-BFGS-B with a univariate solver on each nonconjugate variable.
 

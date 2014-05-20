@@ -10,7 +10,7 @@ A Bayesian nonparametric extension of Nonnegative Matrix Factorization (NMF) as 
 
 ### What's included:
 #### code/ 
-Contains the code for inference, utils, the experiments. **Note**: All the files with the name `exp_*.py` are meant to run with [IPython Notebook](http://ipython.org/notebook.html). Also, [librosa](https://github.com/bmcfee/librosa) is required for all the signal processing components in the experiments sciprts. 
+Contains the code for inference, utils, the experiments. **Note**: All the files with the extension `.ipynb` are meant to run with [IPython Notebook](http://ipython.org/notebook.html). Also, [librosa](https://github.com/bmcfee/librosa) is required for all the signal processing components in the experiments sciprts. 
 
 There is also a Python translation of the gamma process NMF (GaP-NMF) where the original MATLAB code is developed by [Matt Hoffman](http://www.cs.princeton.edu/~mdhoffma/).
 #### notes/ 

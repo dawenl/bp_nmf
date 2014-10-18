@@ -3,7 +3,6 @@
 *.mat
 *.pdf
 *.eps
-*.ipynb
 *.log
 *.aux
 *.gz

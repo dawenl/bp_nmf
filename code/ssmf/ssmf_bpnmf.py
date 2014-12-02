@@ -16,7 +16,103 @@ from sklearn.base import BaseEstimator, TransformerMixin
 EPS = np.spacing(1)
 
 
+class SSMF_NMF(BaseEstimator, TransformerMixin):
+    '''
+    Stochastic structured mean-field variational inference for Poisson NMF
+    '''
+    def __init__(self, n_components=100, max_iter=100, smoothness=100,
+                 random_state=None, verbose=False, **kwargs):
+        self.n_components = n_components
+        self.max_iter = max_iter
+        self.smoothness = smoothness
+        self.random_state = random_state
+        self.verbose = verbose
+
+        if type(self.random_state) is int:
+            np.random.seed(self.random_state)
+        elif self.random_state is not None:
+            np.random.setstate(self.random_state)
+
+        self._parse_args(**kwargs)
+
+    def _parse_args(self, **kwargs):
+        # hyperparameters for components
+        self.a = float(kwargs.get('a', 0.1))
+        self.b = float(kwargs.get('b', 0.1))
+
+        # hyperparameters for activation
+        self.c = float(kwargs.get('c', 0.1))
+        self.d = float(kwargs.get('d', 0.1))
+
+        # hyperparameters for stochastic (natural) gradient
+        self.t0 = float(kwargs.get('t0', 1.))
+        self.kappa = float(kwargs.get('kappa', 0.5))
+
+    def _init_components(self, n_feats):
+        # variational parameters for components W
+        self.nu_W = self.smoothness \
+            * np.random.gamma(self.smoothness, 1. / self.smoothness,
+                              size=(n_feats, self.n_components))
+        self.rho_W = self.smoothness \
+            * np.random.gamma(self.smoothness, 1. / self.smoothness,
+                              size=(n_feats, self.n_components))
+
+    def _init_weights(self, n_samples):
+        # variational parameters for activations H
+        self.nu_H = self.smoothness \
+            * np.random.gamma(self.smoothness, 1. / self.smoothness,
+                              size=(self.n_components, n_samples))
+        self.rho_H = self.smoothness \
+            * np.random.gamma(self.smoothness, 1. / self.smoothness,
+                              size=(self.n_components, n_samples))
+
+    def fit(self, X):
+        self._ssmf_a(X, update_W=True)
+        return self
+
+    def transform(self, X):
+        self._ssmf_a(X, update_W=False)
+        return self.nu_H / self.rho_H
+
+    def _ssmf_a(self, X, update_W=True):
+        n_feats, n_samples = X.shape
+        if update_W:
+            self._init_components(n_feats)
+        else:
+            assert n_feats == self.nu_W.shape[0]
+        self._init_weights(n_samples)
+
+        for i in xrange(self.max_iter):
+            if self.verbose:
+                print 'SSMF-A iteration %d' % i
+                sys.stdout.flush()
+            eta = (self.t0 + i)**(-self.kappa)
+            W = np.random.gamma(self.nu_W, 1. / self.rho_W)
+            H = np.random.gamma(self.nu_H, 1. / self.rho_H)
+            self._update(eta, X, W, H, update_W)
+        pass
+
+    def _update(self, eta, X, W, H, update_W):
+        X_hat = W.dot(H)
+        # update variational parameters for components W
+        if update_W:
+            self.nu_W = (1 - eta) * self.nu_W + \
+                eta * (self.a + W * (X / X_hat).dot(H.T))
+            self.rho_W = (1 - eta) * self.rho_W + \
+                eta * (self.b + H.sum(axis=1))
+
+        # update variational parameters for activations H
+        self.nu_H = (1 - eta) * self.nu_H + eta * (self.c +
+                                                   H * W.T.dot(X / X_hat))
+        self.rho_H = (1 - eta) * self.rho_H + \
+            eta * (self.d + W.sum(axis=0)[:, np.newaxis])
+
+
 class SSMF_BP_NMF(BaseEstimator, TransformerMixin):
+    '''
+    Stochastic structured mean-field variational inference for Beta process
+    Poisson NMF
+    '''
     def __init__(self, n_components=500, max_iter=100, burn_in=1000,
                  cutoff=1e-3, smoothness=100, random_state=None,
                  verbose=False, **kwargs):
@@ -140,13 +236,13 @@ class SSMF_BP_NMF(BaseEstimator, TransformerMixin):
         self.nu_W[:, good_k] = (1 - eta) * self.nu_W[:, good_k] + \
             eta * (self.a + W * (X / X_hat).dot((H * self.S[good_k]).T))
         self.rho_W[:, good_k] = (1 - eta) * self.rho_W[:, good_k] + \
-            eta * (self.b + H.sum(axis=1))
+            eta * (self.b + (H * self.S[good_k]).sum(axis=1))
 
         # update variational parameters for activations H
         self.nu_H[good_k] = (1 - eta) * self.nu_H[good_k] + \
             eta * (self.c + H * self.S[good_k] * W.T.dot(X / X_hat))
         self.rho_H[good_k] = (1 - eta) * self.rho_H[good_k] + \
-            eta * (self.d + W.sum(axis=0)[:, np.newaxis])
+            eta * (self.d + W.sum(axis=0)[:, np.newaxis] * self.S[good_k])
 
         # update variational parameters for sparsity pi
         self.alpha_pi[good_k] = (1 - eta) * self.alpha_pi[good_k] + \

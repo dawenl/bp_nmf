@@ -1,0 +1,1 @@
+Stochastic structured mean-field variational inference and (Psuedo)-Collapsed Gibbs sampler for beta process NMF as described in [Beta Process Non-negative Matrix Factorization with Stochastic Structured Mean-Field Variational Inference](http://arxiv.org/abs/1411.1804).

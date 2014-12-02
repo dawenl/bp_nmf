@@ -13,6 +13,8 @@ A Bayesian nonparametric extension of Nonnegative Matrix Factorization (NMF) as 
 Contains the code for inference, utils, the experiments. **Note**: All the files with the extension `.ipynb` are meant to run with [IPython Notebook](http://ipython.org/notebook.html). Also, [librosa](https://github.com/bmcfee/librosa) is required for all the signal processing components in the experiments sciprts. 
 
 There is also a Python translation of the gamma process NMF (GaP-NMF) where the original MATLAB code is developed by [Matt Hoffman](http://www.cs.princeton.edu/~mdhoffma/).
+
+**Update (2014/12/02)** `ssmf/` directory contains code for inference with stochastic structured mean-field and collapsed Gibbs sampler. This should work no worse than the original inference and probably faster. 
 #### notes/ 
 A detailed derivation of the full variational inference.
 

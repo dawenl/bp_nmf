@@ -18,18 +18,14 @@ EPS = np.spacing(1)
 
 class Gibbs_BP_NMF(BaseEstimator, TransformerMixin):
     '''
-    Stochastic structured mean-field variational inference for Beta process
-    Poisson NMF
+    (Pseudo)-Collapsed Gibbs sampler for Beta process Poisson NMF
     '''
-    def __init__(self, n_components=500, n_samples=100, burn_in=1000,
-                 n_lags=10, cutoff=1e-3, smoothness=100, random_state=None,
+    def __init__(self, n_components=500, burn_in=1000, random_state=None,
                  verbose=False, **kwargs):
+        # truncation level
         self.n_components = n_components
-        self.n_samples = n_samples
+        # number of iterations for burn-in
         self.burn_in = burn_in
-        self.n_lags = n_lags
-        self.cutoff = cutoff
-        self.smoothness = smoothness
         self.random_state = random_state
         self.verbose = verbose
 
@@ -54,6 +50,7 @@ class Gibbs_BP_NMF(BaseEstimator, TransformerMixin):
         self.b0 = float(kwargs.get('b0', 1.))
 
     def fit(self, X):
+        ''' Do full sweep across the data for burn-in '''
         n_feats, n_samples = X.shape
         # randomly initialize parameters
         self.W = np.random.gamma(self.a, 1. / self.b,
@@ -64,23 +61,26 @@ class Gibbs_BP_NMF(BaseEstimator, TransformerMixin):
 
         # randomly initalize binary mask
         self.S = (np.random.rand(self.n_components, n_samples) > .5)
-        self._gibbs_sample_burnin(X)
+        self._burnin(X)
         return self
 
-    def _gibbs_sample_burnin(self, X):
+    def _burnin(self, X):
         self.log_ll = np.zeros(self.burn_in)
         if self.verbose:
             print 'Gibbs burn-in'
             sys.stdout.flush()
         for b in xrange(self.burn_in):
-            self._sample(X)
+            self.gibbs_sample(X)
             self.log_ll[b] = self._log_likelihood(X)
             if self.verbose:
                 sys.stdout.write('\r\tIteration: %d\tLog_ll: %.3f' %
                                  (b, self.log_ll[b]))
                 sys.stdout.flush()
+        if self.verbose:
+            sys.stdout.write('\n')
+        pass
 
-    def _sample(self, X):
+    def gibbs_sample(self, X):
         self._gibbs_sample_S(X)
         self._gibbs_sample_WH(X)
         pass
@@ -102,17 +102,15 @@ class Gibbs_BP_NMF(BaseEstimator, TransformerMixin):
 
     def _gibbs_sample_WH(self, X):
         X_hat = self.W.dot(self.H * self.S) + EPS
-        # update variational parameters for components W
+
         a_W = self.a + self.W * (X / X_hat).dot((self.H * self.S).T)
         b_W = self.b + (self.H * self.S).sum(axis=1)
         self.W = np.random.gamma(a_W, 1. / b_W)
 
-        # update variational parameters for activations H
         c_H = self.c + self.H * self.S * self.W.T.dot(X / X_hat)
         d_H = self.d + self.W.sum(axis=0, keepdims=True).T * self.S
         self.H = np.random.gamma(c_H, 1. / d_H)
 
-        # update variational parameters for sparsity pi
         a_pi = self.a0 / self.n_components + self.S.sum(axis=1)
         b_pi = self.b0 * (self.n_components - 1) / self.n_components \
             + self.S.shape[1] - self.S.sum(axis=1)
